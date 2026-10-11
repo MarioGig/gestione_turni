@@ -32,10 +32,11 @@ ANAGRAFICA_DEFAULT = [
     {"nome": "Ferretti Matteo", "tipo": "RUOLO", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 99, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": False},
     {"nome": "Di Resta Alberico", "tipo": "RUOLO", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 99, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": False},
     {"nome": "Matarazzo Gabriella", "tipo": "RUOLO", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 99, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": False},
-    {"nome": "Extra_1 (Diurno)", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
-    {"nome": "Extra_2 (Diurno)", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
-    {"nome": "Extra_3 (Diurno)", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
-    {"nome": "Extra_4 (H24)", "tipo": "EXTRA", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True}
+    {"nome": "D'Amico Maria Claudia", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
+    {"nome": "Di Giamberardino Giulia", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
+    {"nome": "Di Stefano Alexandra", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
+    {"nome": "Paoletti", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
+    {"nome": "Franzone Giuseppina(H24)", "tipo": "EXTRA", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True}
 ]
 
 # 3. Funzioni JSON e Calcolo Festività Generiche
@@ -212,11 +213,14 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
         
         if num_disponibili < tot_req:
             deficit = tot_req - num_disponibili
-            if not is_f and p_req > 1 and deficit > 0:
-                p_req -= 1
-                deficit -= 1
+            # Riduciamo prima il pomeriggio fino ad azzerarlo (mantenendo ad es. un minimo di 0 o 1 a seconda delle preferenze, qui azzeriamo o scaliamo tutto il possibile)
+            if not is_f and deficit > 0:
+                can_reduce_p = min(deficit, p_req) # Se vuoi lasciare almeno 1 pomeriggio, usa min(deficit, p_req - 1)
+                p_req -= can_reduce_p
+                deficit -= can_reduce_p
+            # Solo se il deficit persiste dopo aver esaurito i pomeriggi, intacciamo la mattina
             if deficit > 0 and m_req > 0:
-                can_reduce_m = min(3, deficit, m_req)
+                can_reduce_m = min(deficit, m_req)
                 m_req -= can_reduce_m
                 deficit -= can_reduce_m
 
