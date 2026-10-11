@@ -213,12 +213,15 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
         
         if num_disponibili < tot_req:
             deficit = tot_req - num_disponibili
-            # Riduciamo prima il pomeriggio fino ad azzerarlo (mantenendo ad es. un minimo di 0 o 1 a seconda delle preferenze, qui azzeriamo o scaliamo tutto il possibile)
-            if not is_f and deficit > 0:
-                can_reduce_p = min(deficit, p_req) # Se vuoi lasciare almeno 1 pomeriggio, usa min(deficit, p_req - 1)
+            
+            # REGOLA RIGOROSA: Riduciamo PRIMA e UNICAMENTE il pomeriggio fino ad azzerarlo se necessario,
+            # lasciando intatta la mattina finché ci sono pomeriggi da tagliare.
+            if not is_f and deficit > 0 and p_req > 0:
+                can_reduce_p = min(deficit, p_req)
                 p_req -= can_reduce_p
                 deficit -= can_reduce_p
-            # Solo se il deficit persiste dopo aver esaurito i pomeriggi, intacciamo la mattina
+                
+            # Solo se abbiamo esaurito i pomeriggi e c'è ancora deficit, intacciamo la mattina
             if deficit > 0 and m_req > 0:
                 can_reduce_m = min(deficit, m_req)
                 m_req -= can_reduce_m
