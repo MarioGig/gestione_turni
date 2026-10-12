@@ -119,7 +119,7 @@ if "turni_fissi" not in st.session_state:
         {"dipendente": "Gigante Mario", "data": "2027-07-10", "turno": "M"}
     ])
 
-# 4. Algoritmo Turnazione con Fabbisogno Dinamico e Anno Parametrico
+# 4. Algoritmo Turnazione con Priorità alla Mattina e Riduzione Mirata sul Pomeriggio
 def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_selezionato):
     elenco = []
     for idx, row in enumerate(dipendenti_list, start=1):
@@ -213,15 +213,12 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
         
         if num_disponibili < tot_req:
             deficit = tot_req - num_disponibili
-            
-            # REGOLA RIGOROSA: Riduciamo PRIMA e UNICAMENTE il pomeriggio fino ad azzerarlo se necessario,
-            # lasciando intatta la mattina finché ci sono pomeriggi da tagliare.
+            # Riduciamo PRIMA il pomeriggio
             if not is_f and deficit > 0 and p_req > 0:
                 can_reduce_p = min(deficit, p_req)
                 p_req -= can_reduce_p
                 deficit -= can_reduce_p
-                
-            # Solo se abbiamo esaurito i pomeriggi e c'è ancora deficit, intacciamo la mattina
+            # Se serve, riduciamo la mattina solo dopo aver azzerato i tagli pomeridiani possibili
             if deficit > 0 and m_req > 0:
                 can_reduce_m = min(deficit, m_req)
                 m_req -= can_reduce_m
@@ -230,12 +227,14 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
         fabb = {"N": n_req, "P": p_req, "M": m_req}
         occupati = set()
         
+        # 1. Assegnazione Assenze
         for dip in elenco:
             caus = controlla_assenza(dip["nome"], d_curr)
             if caus:
                 assegna(dip, caus, d_curr)
                 occupati.add(dip["id"])
 
+        # 2. Assegnazione Turni Fissi
         for dip in elenco:
             if dip["id"] not in occupati:
                 t_fissato = controlla_turno_fisso(dip["nome"], d_curr)
@@ -245,7 +244,8 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
                     if t_fissato in fabb and fabb[t_fissato] > 0:
                         fabb[t_fissato] -= 1
                 
-        for t_code in ["N", "P", "M"]:
+        # 3. Assegnazione prioritaria della MATTINA (M) per prima
+        for t_code in ["M", "P", "N"]:
             if fabb[t_code] > 0:
                 liberi = [d for d in elenco if d["id"] not in occupati]
                 scelti = seleziona(liberi, t_code, fabb[t_code], d_curr)
@@ -253,6 +253,7 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
                     assegna(dip, t_code, d_curr)
                     occupati.add(dip["id"])
                 
+        # 4. Tutti i rimanenti vanno in Riposo (R)
         for dip in [d for d in elenco if d["id"] not in occupati]:
             assegna(dip, "R", d_curr)
             
