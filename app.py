@@ -119,7 +119,7 @@ if "turni_fissi" not in st.session_state:
         {"dipendente": "Gigante Mario", "data": "2027-07-10", "turno": "M"}
     ])
 
-# 4. Algoritmo Turnazione con Priorità alla Mattina e Riduzione Mirata sul Pomeriggio
+# 4. Algoritmo Turnazione con Priorità a Mattina e Notte, e Riduzione sul Pomeriggio
 def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_selezionato):
     elenco = []
     for idx, row in enumerate(dipendenti_list, start=1):
@@ -244,8 +244,8 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
                     if t_fissato in fabb and fabb[t_fissato] > 0:
                         fabb[t_fissato] -= 1
                 
-        # 3. Assegnazione prioritaria della MATTINA (M) per prima
-        for t_code in ["M", "P", "N"]:
+        # 3. Assegnazione con priorità: Mattina (M) -> Notte (N) -> Pomeriggio (P)
+        for t_code in ["M", "N", "P"]:
             if fabb[t_code] > 0:
                 liberi = [d for d in elenco if d["id"] not in occupati]
                 scelti = seleziona(liberi, t_code, fabb[t_code], d_curr)
