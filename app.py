@@ -261,7 +261,7 @@ def esegui_simulazione(dipendenti_list, assenze_list, turni_fissi_list, anno_sel
         
     return elenco
 
-# 5. Generatore Excel Multi-Anno
+# 5. Generatore Excel Multi-Anno con Riepilogo Giornaliero per Turno (Riposi solo per RUOLO)
 def genera_excel_bytes(elenco, anno_selezionato, mese_selezionato=0):
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
@@ -358,6 +358,45 @@ def genera_excel_bytes(elenco, anno_selezionato, mese_selezionato=0):
                 ws.cell(row=empty_row, column=1 + g, value="").border = thin
 
             r_idx += 2
+
+        # --- RIGHE DI RIEPILOGO GIORNALIERO IN FONDO ---
+        # Tipi di turno da riepilogare nelle righe inferiori
+        tipi_riepilogo = [
+            ("mattina", "M"),
+            ("pomeriggio", "P"),
+            ("notte", "N"),
+            ("riposo", "R"),
+            ("ferie", "F"),
+            ("malattia", "MAL")
+        ]
+
+        for label_etichetta, codice_turno in tipi_riepilogo:
+            c_label = ws.cell(row=r_idx, column=1, value=label_etichetta)
+            c_label.font = font_bold
+            c_label.alignment = align_left
+            c_label.border = thin
+            ws.cell(row=r_idx, column=n_giorni + 2, value="").border = thin
+            ws.cell(row=r_idx, column=n_giorni + 3, value="").border = thin
+
+            for g in range(1, n_giorni + 1):
+                d = date(anno_selezionato, m, g)
+                # Calcola quanti dipendenti hanno questo turno in questo giorno
+                count = 0
+                for dip in elenco:
+                    # Se è riposo (R), conteggiamo SOLO i dipendenti di tipo "RUOLO"
+                    if codice_turno == "R":
+                        if dip["tipo"] == "RUOLO" and dip["cronologia"].get(d) == "R":
+                            count += 1
+                    else:
+                        if dip["cronologia"].get(d) == codice_turno:
+                            count += 1
+
+                c_val = ws.cell(row=r_idx, column=1 + g, value=count if count > 0 else "")
+                c_val.font = font_data
+                c_val.alignment = align_center
+                c_val.border = thin
+
+            r_idx += 1
 
         ws.column_dimensions['A'].width = 24
         for g in range(1, n_giorni + 1):
