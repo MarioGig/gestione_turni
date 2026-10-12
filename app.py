@@ -36,7 +36,7 @@ ANAGRAFICA_DEFAULT = [
     {"nome": "Di Giamberardino Giulia", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
     {"nome": "Di Stefano Alexandra", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
     {"nome": "Paoletti", "tipo": "EXTRA", "can_do_night": False, "max_notti_mese": 0, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True},
-    {"nome": "Franzone Giuseppina(H24)", "tipo": "EXTRA", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True}
+    {"nome": "Franzone Giuseppina", "tipo": "EXTRA", "can_do_night": True, "max_notti_mese": 99, "max_festivi_mese": 1, "max_turni_mese": 99, "notte_solo_se_festivo": False, "solo_festivi": True}
 ]
 
 # 3. Funzioni JSON e Calcolo Festività Generiche
@@ -588,7 +588,7 @@ with tab3:
             st.warning(f"Rimossa/o: {nome_rimosso}")
             st.rerun()
 
-# TAB 4: GENERAZIONE EXCEL CON SELEZIONE ANNO (2026 - 2050)
+# TAB 4: GENERAZIONE EXCEL CON SELEZIONE ANNO E MESE
 with tab4:
     st.subheader("📊 Selezione dell'Anno, del Periodo e Calcolo Pianificazione")
     
