@@ -1,0 +1,1588 @@
+{
+  "struttura": "Medicina Interna Atri",
+  "personale": [
+    {
+      "Nome": "Di Giacinto Gabriella",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Gigante Mario",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Ridolfi Alessia",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Sorgentone Sara",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Fabrizio Alessandra",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Capuani Federica",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": false,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Italiani Daniele",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Santilli Federico",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Matarazzo Gabriella",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Di Resta Alberico",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Ferretti Matteo",
+      "Categoria": "Di ruolo",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 38.0
+    },
+    {
+      "Nome": "Franzone Giuseppina",
+      "Categoria": "Solo festivi",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": true,
+      "Ore settimanali": 12.0
+    },
+    {
+      "Nome": "D'Amico Maria Claudia",
+      "Categoria": "Solo festivi",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": false,
+      "Ore settimanali": 6.2
+    },
+    {
+      "Nome": "Di Giamberardino Giulia",
+      "Categoria": "Solo festivi",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": false,
+      "Ore settimanali": 6.2
+    },
+    {
+      "Nome": "Di Stefano Alexandra",
+      "Categoria": "Solo festivi",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": false,
+      "Ore settimanali": 6.2
+    },
+    {
+      "Nome": "Paoletti Giorgio",
+      "Categoria": "Solo festivi",
+      "Mattina": true,
+      "Pomeriggio": true,
+      "Notte": false,
+      "Ore settimanali": 6.2
+    }
+  ],
+  "mesi": {
+    "2026-11": {
+      "quote": [
+        {
+          "Nome": "Di Giacinto Gabriella",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": 1
+        },
+        {
+          "Nome": "Gigante Mario",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": 2
+        },
+        {
+          "Nome": "Sorgentone Sara",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": 2
+        },
+        {
+          "Nome": "Fabrizio Alessandra",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Capuani Federica",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Italiani Daniele",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Santilli Federico",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Matarazzo Gabriella",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Di Resta Alberico",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Ferretti Matteo",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Franzone Giuseppina",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "D'Amico Maria Claudia",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Di Giamberardino Giulia",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Di Stefano Alexandra",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        },
+        {
+          "Nome": "Paoletti Giorgio",
+          "M min": null,
+          "M max": null,
+          "P min": null,
+          "P max": null,
+          "N min": null,
+          "N max": null
+        }
+      ],
+      "assenze": [
+        {
+          "Nome": "Gigante Mario",
+          "Tipo": "Ferie",
+          "Dal": "2026-10-01",
+          "Al": "2026-10-01"
+        }
+      ],
+      "predeterminati": [
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-02",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-03",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-06",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-11",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-12",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-16",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-17",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-20",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-25",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-26",
+          "Turno": "Mattina"
+        },
+        {
+          "Nome": "Ridolfi Alessia",
+          "Data": "2026-11-30",
+          "Turno": "Mattina"
+        }
+      ],
+      "festivi_extra": [],
+      "calendario": [
+        {
+          "Data": "2026-11-01",
+          "Turno": "Mattina",
+          "Nome": "Paoletti Giorgio"
+        },
+        {
+          "Data": "2026-11-01",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Giamberardino Giulia"
+        },
+        {
+          "Data": "2026-11-01",
+          "Turno": "Notte",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Pomeriggio",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Pomeriggio",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-02",
+          "Turno": "Notte",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Pomeriggio",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Pomeriggio",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-03",
+          "Turno": "Notte",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Pomeriggio",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-04",
+          "Turno": "Notte",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Pomeriggio",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Pomeriggio",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-05",
+          "Turno": "Notte",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Pomeriggio",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Pomeriggio",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-06",
+          "Turno": "Notte",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Pomeriggio",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Pomeriggio",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-07",
+          "Turno": "Notte",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-08",
+          "Turno": "Mattina",
+          "Nome": "Di Giamberardino Giulia"
+        },
+        {
+          "Data": "2026-11-08",
+          "Turno": "Pomeriggio",
+          "Nome": "D'Amico Maria Claudia"
+        },
+        {
+          "Data": "2026-11-08",
+          "Turno": "Notte",
+          "Nome": "Franzone Giuseppina"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Pomeriggio",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-09",
+          "Turno": "Notte",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Pomeriggio",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Pomeriggio",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-10",
+          "Turno": "Notte",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Pomeriggio",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Pomeriggio",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-11",
+          "Turno": "Notte",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Pomeriggio",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Pomeriggio",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-12",
+          "Turno": "Notte",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Pomeriggio",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Pomeriggio",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-13",
+          "Turno": "Notte",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Pomeriggio",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-14",
+          "Turno": "Notte",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-15",
+          "Turno": "Mattina",
+          "Nome": "Di Giamberardino Giulia"
+        },
+        {
+          "Data": "2026-11-15",
+          "Turno": "Pomeriggio",
+          "Nome": "Franzone Giuseppina"
+        },
+        {
+          "Data": "2026-11-15",
+          "Turno": "Notte",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Pomeriggio",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Pomeriggio",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-16",
+          "Turno": "Notte",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Pomeriggio",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Pomeriggio",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-17",
+          "Turno": "Notte",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Pomeriggio",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-18",
+          "Turno": "Notte",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Pomeriggio",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Pomeriggio",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-19",
+          "Turno": "Notte",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Pomeriggio",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Pomeriggio",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-20",
+          "Turno": "Notte",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Pomeriggio",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-21",
+          "Turno": "Notte",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-22",
+          "Turno": "Mattina",
+          "Nome": "Franzone Giuseppina"
+        },
+        {
+          "Data": "2026-11-22",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Stefano Alexandra"
+        },
+        {
+          "Data": "2026-11-22",
+          "Turno": "Notte",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Pomeriggio",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-23",
+          "Turno": "Notte",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Pomeriggio",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-24",
+          "Turno": "Notte",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Pomeriggio",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Pomeriggio",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-25",
+          "Turno": "Notte",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Pomeriggio",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Pomeriggio",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-26",
+          "Turno": "Notte",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Pomeriggio",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Pomeriggio",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-27",
+          "Turno": "Notte",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Mattina",
+          "Nome": "Di Giacinto Gabriella"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Mattina",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Mattina",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Mattina",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Mattina",
+          "Nome": "Santilli Federico"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Pomeriggio",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Pomeriggio",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-28",
+          "Turno": "Notte",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-29",
+          "Turno": "Mattina",
+          "Nome": "Franzone Giuseppina"
+        },
+        {
+          "Data": "2026-11-29",
+          "Turno": "Pomeriggio",
+          "Nome": "Paoletti Giorgio"
+        },
+        {
+          "Data": "2026-11-29",
+          "Turno": "Notte",
+          "Nome": "Di Resta Alberico"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Mattina",
+          "Nome": "Capuani Federica"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Mattina",
+          "Nome": "Fabrizio Alessandra"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Mattina",
+          "Nome": "Gigante Mario"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Mattina",
+          "Nome": "Matarazzo Gabriella"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Mattina",
+          "Nome": "Ridolfi Alessia"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Mattina",
+          "Nome": "Sorgentone Sara"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Pomeriggio",
+          "Nome": "Ferretti Matteo"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Pomeriggio",
+          "Nome": "Italiani Daniele"
+        },
+        {
+          "Data": "2026-11-30",
+          "Turno": "Notte",
+          "Nome": "Santilli Federico"
+        }
+      ]
+    }
+  },
+  "regole": {
+    "turni": [
+      {
+        "Turno": "Mattina",
+        "Inizio": "08:00",
+        "Fine": "14:20"
+      },
+      {
+        "Turno": "Pomeriggio",
+        "Inizio": "14:00",
+        "Fine": "20:20"
+      },
+      {
+        "Turno": "Notte",
+        "Inizio": "20:00",
+        "Fine": "08:00"
+      }
+    ],
+    "copertura": [
+      {
+        "Turno": "Mattina",
+        "Feriale": 6,
+        "Festivo": 1
+      },
+      {
+        "Turno": "Pomeriggio",
+        "Feriale": 2,
+        "Festivo": 1
+      },
+      {
+        "Turno": "Notte",
+        "Feriale": 1,
+        "Festivo": 1
+      }
+    ],
+    "riposo_minimo_ore": 11
+  }
+}
