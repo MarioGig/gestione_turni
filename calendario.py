@@ -246,6 +246,9 @@ def genera_calendario(
         for giorno in range(1, calendar.monthrange(anno, mese)[1] + 1)
     ]
     richieste: dict[tuple[date, str], int] = {}
+    minimi_richiesti: dict[tuple[date, str], int] = {}
+    termini_copertura_pomeriggio = []
+    massimo_scarto_copertura = 0
     for giorno in giorni:
         for turno in turni:
             fascia = "Festivo" if _turno_festivo(giorno, turno, extra) else "Feriale"
@@ -256,6 +259,19 @@ def genera_calendario(
             if richiesta < 0:
                 return [], [f"La copertura del turno {turno} non può essere negativa."]
             richieste[(giorno, turno)] = richiesta
+            minimo = richiesta
+            if turno == "Pomeriggio" and fascia == "Feriale":
+                try:
+                    minimo = int(regole.get("pomeriggio_feriale_minimo", richiesta))
+                except (TypeError, ValueError):
+                    return [], ["Il minimo del pomeriggio feriale non è valido."]
+                if minimo < 0 or minimo > richiesta:
+                    return [], [
+                        "Il minimo del pomeriggio feriale deve essere compreso "
+                        "tra zero e la copertura feriale configurata."
+                    ]
+                massimo_scarto_copertura += richiesta - minimo
+            minimi_richiesti[(giorno, turno)] = minimo
 
     quote = {
         str(riga.get("Nome", "")).strip(): riga
@@ -372,15 +388,23 @@ def genera_calendario(
                 if (nome, giorno, turno) in predet_set:
                     model.Add(variabile == 1)
             candidati_per_slot[slot] = candidati
-            if len(candidati) < richieste[slot]:
+            if len(candidati) < minimi_richiesti[slot]:
                 errori.append(
                     f"Copertura impossibile il {giorno:%d/%m/%Y} ({turno}): "
-                    f"servono {richieste[slot]} persone, disponibili {len(candidati)}."
+                    f"servono almeno {minimi_richiesti[slot]} persone, "
+                    f"disponibili {len(candidati)}."
                 )
-            model.Add(
-                sum(assegnazioni[(nome, giorno, turno)] for nome in candidati)
-                == richieste[slot]
-            )
+            assegnati = sum(assegnazioni[(nome, giorno, turno)] for nome in candidati)
+            model.Add(assegnati >= minimi_richiesti[slot])
+            model.Add(assegnati <= richieste[slot])
+            if richieste[slot] > minimi_richiesti[slot]:
+                scopertura = model.NewIntVar(
+                    0,
+                    richieste[slot] - minimi_richiesti[slot],
+                    f"scopertura_pomeriggio_{len(termini_copertura_pomeriggio)}",
+                )
+                model.Add(scopertura == richieste[slot] - assegnati)
+                termini_copertura_pomeriggio.append(scopertura)
     if errori:
         return [], errori
 
@@ -429,6 +453,7 @@ def genera_calendario(
                     model.Add(var_a + var_b <= 1)
 
     termini_obiettivo = []
+    massimo_scarto_equita = 0
     for turno in turni:
         slot_totali = sum(richieste[(giorno, turno)] for giorno in giorni)
         opportunita = {
@@ -451,6 +476,7 @@ def genera_calendario(
                 if (nome, giorno, turno) in assegnazioni
             )
             scarto = model.NewIntVar(0, slot_totali * opportunita_totali, f"scarto_{len(termini_obiettivo)}")
+            massimo_scarto_equita += slot_totali * opportunita_totali
             differenza = model.NewIntVar(
                 -slot_totali * opportunita_totali,
                 slot_totali * opportunita_totali,
@@ -494,9 +520,18 @@ def genera_calendario(
         model.AddAbsEquality(scarto, differenza)
         termini_saldo_ore.append(scarto)
 
-    if termini_obiettivo or termini_saldo_ore:
+    if termini_obiettivo or termini_saldo_ore or termini_copertura_pomeriggio:
+        peso_equita = 1
+        peso_copertura = massimo_scarto_equita + 1
+        peso_saldo_ore = (
+            massimo_scarto_copertura * peso_copertura
+            + massimo_scarto_equita
+            + 1
+        )
         model.Minimize(
-            sum(termini_saldo_ore) * 10_000 + sum(termini_obiettivo)
+            sum(termini_saldo_ore) * peso_saldo_ore
+            + sum(termini_copertura_pomeriggio) * peso_copertura
+            + sum(termini_obiettivo) * peso_equita
         )
 
     for indice, (nome_a, giorno_a, turno_a) in enumerate(predeterminati):

@@ -52,6 +52,7 @@ REGOLE_DEFAULT = {
         {"Turno": "Pomeriggio", "Feriale": 2, "Festivo": 1},
         {"Turno": "Notte", "Feriale": 1, "Festivo": 1},
     ],
+    "pomeriggio_feriale_minimo": 1,
     "riposo_minimo_ore": 11,
 }
 
@@ -690,6 +691,19 @@ with tab_regole:
         },
     )
 
+    pomeriggio_feriale_minimo = st.number_input(
+        "Minimo persone al pomeriggio nei giorni feriali",
+        min_value=0,
+        max_value=50,
+        value=int(regole.get("pomeriggio_feriale_minimo", 1)),
+        step=1,
+        help=(
+            "La copertura Feriale del pomeriggio è il massimo desiderato. "
+            "Il generatore può scendere fino a questo minimo per riequilibrare le ore."
+        ),
+        key=f"pomeriggio_minimo_{scelta}_{versione_r}",
+    )
+
     riposo = st.number_input(
         "Ore minime tra la fine di un turno e l'inizio del successivo",
         min_value=0,
@@ -713,8 +727,23 @@ with tab_regole:
                 copertura[colonna] = (
                     pd.to_numeric(copertura[colonna], errors="coerce").fillna(0).astype(int)
                 )
+            copertura_pomeriggio_feriale = next(
+                (
+                    int(riga["Feriale"])
+                    for riga in copertura.to_dict(orient="records")
+                    if riga.get("Turno") == "Pomeriggio"
+                ),
+                0,
+            )
+            if pomeriggio_feriale_minimo > copertura_pomeriggio_feriale:
+                st.error(
+                    "Il minimo di persone al pomeriggio feriale non può superare "
+                    "la copertura feriale del pomeriggio."
+                )
+                st.stop()
             regole["turni"] = json.loads(turni_mod.to_json(orient="records"))
             regole["copertura"] = json.loads(copertura.to_json(orient="records"))
+            regole["pomeriggio_feriale_minimo"] = int(pomeriggio_feriale_minimo)
             regole["riposo_minimo_ore"] = int(riposo)
             invalida_calendari(dati)
             salva_dati(scelta, dati)

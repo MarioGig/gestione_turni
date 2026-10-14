@@ -17,7 +17,10 @@ PREFISSI_QUOTE = ("M", "P", "N")
 
 
 def _codice_assenza(tipo: str) -> str:
-    return f"({CODICI_ASSENZA.get(tipo, 'CS')})"
+    try:
+        return CODICI_ASSENZA[tipo]
+    except KeyError as errore:
+        raise ValueError(f"Tipo di assenza non riconosciuto: {tipo}.") from errore
 
 
 def crea_report_excel(
@@ -68,7 +71,7 @@ def crea_report_excel(
         turno_previsto = str(assenza.get("Turno previsto") or "")
         credito_giornaliero = (
             durata_turno_minuti(regole, turno_previsto)
-            if codice not in ("(R)",) and turno_previsto
+            if codice != "R" and turno_previsto
             else 0
         )
         for giorno in giorni:
@@ -148,11 +151,11 @@ def crea_report_excel(
     calendario.row_dimensions[1].height = 34
     calendario.row_dimensions[2].height = 24
     validazione = DataValidation(
-        type="list", formula1='"M,P,N,R,(F),(R),(M),(CS)"', allow_blank=False
+        type="list", formula1='"M,P,N,R,F,CS"', allow_blank=False
     )
-    validazione.error = "Usa M, P, N, R oppure (F), (R), (M), (CS)."
+    validazione.error = "Usa M, P, N, R, F oppure CS."
     validazione.errorTitle = "Codice non valido"
-    validazione.prompt = "M mattina · P pomeriggio · N notte · R riposo · assenze tra parentesi"
+    validazione.prompt = "M mattina/malattia · P pomeriggio · N notte · R riposo · F ferie · CS congedo"
     validazione.promptTitle = "Codici calendario"
     calendario.add_data_validation(validazione)
 
@@ -175,16 +178,20 @@ def crea_report_excel(
             cella = calendario.cell(row=riga_excel, column=indice, value=codice)
             cella.alignment = Alignment(horizontal="center", vertical="center")
             validazione.add(cella)
-            colore_codice = {
-                "M": "D9EAF7",
-                "P": "E2F0D9",
-                "N": "D9E1F2",
-                "R": "F2F2F2",
-                "(F)": "FCE4D6",
-                "(R)": "F2F2F2",
-                "(M)": "F4CCCC",
-                "(CS)": "D9D2E9",
-            }[codice]
+            if chiave in assenze_per_nome_giorno:
+                colore_codice = {
+                    "F": "FCE4D6",
+                    "R": "F2F2F2",
+                    "M": "F4CCCC",
+                    "CS": "D9D2E9",
+                }[codice]
+            else:
+                colore_codice = {
+                    "M": "D9EAF7",
+                    "P": "E2F0D9",
+                    "N": "D9E1F2",
+                    "R": "F2F2F2",
+                }[codice]
             cella.fill = PatternFill("solid", fgColor=colore_codice)
             cella.font = Font(bold=codice != "R")
             credito.cell(
@@ -202,9 +209,20 @@ def crea_report_excel(
 
         ultima_colonna_giorno = get_column_letter(numero_giorni + 1)
         intervallo = f"$B{riga_excel}:${ultima_colonna_giorno}{riga_excel}"
+        intervallo_credito = (
+            f"'Credito'!$B{righe_credito[nome]}:"
+            f"${ultima_colonna_giorno}{righe_credito[nome]}"
+        )
         for codice, titolo in zip(("M", "P", "N"), intestazioni_riepilogo[:3]):
             col_formula = get_column_letter(colonne_riepilogo[titolo])
-            calendario[f"{col_formula}{riga_excel}"] = f'=COUNTIF({intervallo},"{codice}")'
+            if codice == "M":
+                calendario[f"{col_formula}{riga_excel}"] = (
+                    f'=COUNTIFS({intervallo},"M",{intervallo_credito},0)'
+                )
+            else:
+                calendario[f"{col_formula}{riga_excel}"] = (
+                    f'=COUNTIF({intervallo},"{codice}")'
+                )
 
         parti_festivi = []
         for indice, giorno in enumerate(giorni, start=2):
@@ -213,7 +231,8 @@ def crea_report_excel(
             notte_festiva = is_festivo(giorno + timedelta(days=1), extra)
             if festa:
                 parti_festivi.append(
-                    f'COUNTIF({colonna}{riga_excel},"M")+'
+                    f'COUNTIFS({colonna}{riga_excel},"M",'
+                    f"'Credito'!{colonna}{righe_credito[nome]},0)+"
                     f'COUNTIF({colonna}{riga_excel},"P")+'
                     f'COUNTIF({colonna}{riga_excel},"N")'
                 )
@@ -240,13 +259,9 @@ def crea_report_excel(
             column=colonne_riepilogo["Ore lavorate"],
             value=ore_lavorate_formula,
         )
-        intervallo_credito = (
-            f"'Credito'!$B{righe_credito[nome]}:"
-            f"${ultima_colonna_giorno}{righe_credito[nome]}"
-        )
         formula_credito = (
-            f'=SUMPRODUCT((({intervallo}="(F)")+({intervallo}="(M)")+'
-            f'({intervallo}="(CS)"))*{intervallo_credito})/60'
+            f'=SUMPRODUCT((({intervallo}="F")+({intervallo}="M")+'
+            f'({intervallo}="CS"))*{intervallo_credito})/60'
         )
         calendario.cell(
             row=riga_excel,
@@ -291,8 +306,13 @@ def crea_report_excel(
         for indice in range(2, numero_giorni + 2):
             colonna = get_column_letter(indice)
             riferimenti = [
-                f'COUNTIF({colonna}{riga_persona},"{codice}")'
-                for riga_persona in righe_calendario.values()
+                (
+                    f'COUNTIFS({colonna}{riga_persona},"M",'
+                    f"'Credito'!{colonna}{righe_credito[nome]},0)"
+                    if codice == "M"
+                    else f'COUNTIF({colonna}{riga_persona},"{codice}")'
+                )
+                for nome, riga_persona in righe_calendario.items()
             ]
             formula = f"=SUM({','.join(riferimenti)})" if riferimenti else "=0"
             calendario.cell(row=riga, column=indice, value=formula)
@@ -400,7 +420,7 @@ def _crea_vincoli(sheet, pianificazione: dict) -> None:
     for assenza in pianificazione.get("assenze", []):
         sheet.append(
             [
-                f"({CODICI_ASSENZA.get(assenza.get('Tipo'), 'CS')})",
+                _codice_assenza(str(assenza.get("Tipo") or "")),
                 assenza.get("Nome"),
                 date.fromisoformat(str(assenza["Dal"])[:10]),
                 date.fromisoformat(str(assenza["Al"])[:10]),
@@ -423,7 +443,8 @@ def _crea_vincoli(sheet, pianificazione: dict) -> None:
 def _crea_info(sheet, struttura: str, anno: int, mese: int) -> None:
     sheet.append(["Report turni", f"{struttura} - {mese:02d}/{anno}"])
     sheet.append(["Legenda turni", "M mattina · P pomeriggio · N notte · R riposo"])
-    sheet.append(["Legenda assenze", "(F) ferie · (R) riposo · (M) malattia · (CS) congedo straordinario"])
+    sheet.append(["Legenda assenze", "F ferie · M malattia · CS congedo straordinario · R riposo"])
+    sheet.append(["Nota codici", "M mattina è blu; M malattia è rosso."])
     sheet.append(["Riepilogo giornaliero", "Le righe finali del foglio Calendario riportano le coperture M, P e N per giorno."])
     sheet.append(["Riepilogo dipendenti", "Le colonne a destra mostrano turni, festivi, ore lavorate, credito assenze e saldo annuo."])
     sheet.append(["Credito assenze", "Ferie, malattia e congedo accreditano la durata del turno previsto; il riposo (R) vale zero ore."])
