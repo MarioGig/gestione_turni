@@ -3,11 +3,20 @@ from datetime import date, timedelta
 from io import BytesIO
 
 from openpyxl import Workbook
+from openpyxl.formatting.rule import CellIsRule
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
-from calendario import CODICI_ASSENZA, durata_turno_minuti, festivita_nazionali, is_festivo
+from calendario import (
+    CODICI_ASSENZA,
+    SCOSTAMENTO_MAX_TURNI,
+    durata_turno_minuti,
+    festivita_nazionali,
+    giorni_obiettivo,
+    is_festivo,
+    monte_ore_minuti,
+)
 
 
 CODICI_TURNO = {"Mattina": "M", "Pomeriggio": "P", "Notte": "N"}
@@ -33,6 +42,7 @@ def crea_report_excel(
     assegnazioni: list[dict],
     storico_minuti: dict[str, int] | None = None,
     storico_mesi: dict[int, dict[str, int]] | None = None,
+    assegnazioni_precedenti: list[dict] | None = None,
 ) -> bytes:
     """Crea il calendario mensile modificabile e il riepilogo annuale."""
     workbook = Workbook()
@@ -105,7 +115,8 @@ def crea_report_excel(
     intestazioni_riepilogo = [
         "Mattine", "Pomeriggi", "Notti", "Festivi", "Ore lavorate",
         "Ore assenza accreditate", "Ore validate precedenti",
-        "Ore progressive", "Obiettivo annuo a oggi", "Scostamento",
+        "Ore progressive", "Obiettivo progressivo", "Scostamento",
+        "Monte ore mese", "Scost. mese (ore)", "Scost. mese (turni)",
     ]
     for offset, intestazione in enumerate(intestazioni_riepilogo):
         colonna = colonna_riepilogo + offset
@@ -118,7 +129,7 @@ def crea_report_excel(
         cella.fill = PatternFill("solid", fgColor="1F4E78")
         cella.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         calendario.column_dimensions[get_column_letter(colonna)].width = (
-            20 if intestazione in ("Ore assenza accreditate", "Ore validate precedenti", "Obiettivo annuo a oggi") else 14
+            20 if intestazione in ("Ore assenza accreditate", "Ore validate precedenti", "Obiettivo progressivo", "Scost. mese (turni)") else 14
         )
 
     calendario.merge_cells("A1:A2")
@@ -151,13 +162,20 @@ def crea_report_excel(
     calendario.row_dimensions[1].height = 34
     calendario.row_dimensions[2].height = 24
     validazione = DataValidation(
-        type="list", formula1='"M,P,N,R,F,CS"', allow_blank=False
+        type="list", formula1='"M,P,N,S,R,F,CS"', allow_blank=False
     )
-    validazione.error = "Usa M, P, N, R, F oppure CS."
+    validazione.error = "Usa M, P, N, S, R, F oppure CS."
     validazione.errorTitle = "Codice non valido"
-    validazione.prompt = "M mattina/malattia · P pomeriggio · N notte · R riposo · F ferie · CS congedo"
+    validazione.prompt = "M mattina/malattia · P pomeriggio · N notte · S smonto · R riposo · F ferie · CS congedo"
     validazione.promptTitle = "Codici calendario"
     calendario.add_data_validation(validazione)
+
+    notti_mese_precedente = {
+        str(riga.get("Nome", "")).strip()
+        for riga in (assegnazioni_precedenti or [])
+        if riga.get("Turno") == "Notte"
+        and date.fromisoformat(str(riga["Data"])[:10]) == giorni[0] - timedelta(days=1)
+    }
 
     righe_calendario: dict[str, int] = {}
     righe_credito: dict[str, int] = {}
@@ -172,9 +190,17 @@ def crea_report_excel(
         credito.cell(row=riga_excel, column=1, value=nome)
         for indice, giorno in enumerate(giorni, start=2):
             chiave = (nome, giorno)
-            codice = assenze_per_nome_giorno.get(
-                chiave, turni_per_nome_giorno.get(chiave, "R")
-            )
+            if chiave in assenze_per_nome_giorno:
+                codice = assenze_per_nome_giorno[chiave]
+            elif chiave in turni_per_nome_giorno:
+                codice = turni_per_nome_giorno[chiave]
+            else:
+                # il giorno dopo la notte è lo smonto (S), non un giorno di riposo
+                dopo_notte = (
+                    turni_per_nome_giorno.get((nome, giorno - timedelta(days=1))) == "N"
+                    or (giorno == giorni[0] and nome in notti_mese_precedente)
+                )
+                codice = "S" if dopo_notte else "R"
             cella = calendario.cell(row=riga_excel, column=indice, value=codice)
             cella.alignment = Alignment(horizontal="center", vertical="center")
             validazione.add(cella)
@@ -190,10 +216,11 @@ def crea_report_excel(
                     "M": "D9EAF7",
                     "P": "E2F0D9",
                     "N": "D9E1F2",
+                    "S": "FFF2CC",
                     "R": "F2F2F2",
                 }[codice]
             cella.fill = PatternFill("solid", fgColor=colore_codice)
-            cella.font = Font(bold=codice != "R")
+            cella.font = Font(bold=codice not in ("R", "S"))
             credito.cell(
                 row=riga_excel,
                 column=indice,
@@ -278,30 +305,50 @@ def crea_report_excel(
         col_assenze = get_column_letter(colonne_riepilogo["Ore assenza accreditate"])
         col_precedenti = get_column_letter(colonne_riepilogo["Ore validate precedenti"])
         col_progressive = get_column_letter(colonne_riepilogo["Ore progressive"])
-        col_obiettivo = get_column_letter(colonne_riepilogo["Obiettivo annuo a oggi"])
+        col_obiettivo = get_column_letter(colonne_riepilogo["Obiettivo progressivo"])
         col_scostamento = get_column_letter(colonne_riepilogo["Scostamento"])
         calendario[f"{col_progressive}{riga_excel}"] = (
             f"={col_lavorate}{riga_excel}+{col_assenze}{riga_excel}+{col_precedenti}{riga_excel}"
         )
         if persona.get("Categoria", "Di ruolo") == "Di ruolo":
-            ore_settimanali = persona.get("Ore settimanali")
-            if ore_settimanali is None:
-                ore_settimanali = 38
-            obiettivo_ore = (
-                float(ore_settimanali)
-                * 52
-                * giorno_progressivo(anno, mese)
-                / (366 if calendar.isleap(anno) else 365)
-            )
+            ore_settimanali = float(persona.get("Ore settimanali", 38) or 38)
+            obiettivo_ore = monte_ore_minuti(
+                ore_settimanali, giorni_obiettivo(anno, mese, storico_mesi or {})
+            ) / 60
             calendario[f"{col_obiettivo}{riga_excel}"] = round(obiettivo_ore, 2)
             calendario[f"{col_scostamento}{riga_excel}"] = (
                 f"={col_progressive}{riga_excel}-{col_obiettivo}{riga_excel}"
+            )
+            # monte ore del mese = ore settimanali x (giorni / 7) e scostamento in ore e in turni
+            col_monte = get_column_letter(colonne_riepilogo["Monte ore mese"])
+            col_scost_ore = get_column_letter(colonne_riepilogo["Scost. mese (ore)"])
+            col_scost_turni = get_column_letter(colonne_riepilogo["Scost. mese (turni)"])
+            calendario[f"{col_monte}{riga_excel}"] = round(
+                monte_ore_minuti(ore_settimanali, numero_giorni) / 60, 2
+            )
+            calendario[f"{col_scost_ore}{riga_excel}"] = (
+                f"={col_lavorate}{riga_excel}+{col_assenze}{riga_excel}-{col_monte}{riga_excel}"
+            )
+            calendario[f"{col_scost_turni}{riga_excel}"] = (
+                f"={col_scost_ore}{riga_excel}/{durata_ore[0]}"
             )
         for colonna in colonne_riepilogo.values():
             calendario.cell(row=riga_excel, column=colonna).number_format = "0.00"
 
     ultima_riga_personale = 2 if not personale_per_nome else 3 + (len(personale_per_nome) - 1) * 2
     riga_riepilogo_turni = ultima_riga_personale + 2
+    if personale_per_nome:
+        # evidenzia in rosso chi supera lo scostamento massimo (in turni) dal monte ore mensile
+        tolleranza_turni = int(regole.get("scostamento_max_turni", SCOSTAMENTO_MAX_TURNI))
+        col_turni = get_column_letter(colonne_riepilogo["Scost. mese (turni)"])
+        calendario.conditional_formatting.add(
+            f"{col_turni}3:{col_turni}{ultima_riga_personale}",
+            CellIsRule(
+                operator="notBetween",
+                formula=[str(-tolleranza_turni), str(tolleranza_turni)],
+                fill=PatternFill("solid", bgColor="F4CCCC", fgColor="F4CCCC"),
+            ),
+        )
     for offset, codice in enumerate(("M", "P", "N"), start=0):
         riga = riga_riepilogo_turni + offset
         calendario.cell(row=riga, column=1, value=f"In turno {codice}")
@@ -360,7 +407,7 @@ def _crea_riepilogo_annuale(
     storico_minuti: dict[str, int],
 ) -> None:
     mesi = [f"{calendar.month_abbr[indice]}" for indice in range(1, 13)]
-    sheet.append(["Dipendente", *mesi, "Ore annue a oggi", "Obiettivo a oggi", "Saldo"])
+    sheet.append(["Dipendente", *mesi, "Ore annue a oggi", "Obiettivo progressivo", "Saldo"])
     giorni_anno = 366 if calendar.isleap(anno) else 365
     progressivo = giorno_progressivo(anno, mese)
     colonna_mese_corrente = get_column_letter(mese + 1)
@@ -395,15 +442,10 @@ def _crea_riepilogo_annuale(
             value=f"={riferimento_mese}+{storico_ore}",
         )
         if persona.get("Categoria", "Di ruolo") == "Di ruolo":
-            ore_settimanali = persona.get("Ore settimanali")
-            if ore_settimanali is None:
-                ore_settimanali = 38
-            obiettivo = (
-                float(ore_settimanali)
-                * 52
-                * progressivo
-                / giorni_anno
-            )
+            obiettivo = monte_ore_minuti(
+                float(persona.get("Ore settimanali", 38) or 38),
+                giorni_obiettivo(anno, mese, storico_mesi),
+            ) / 60
             sheet.cell(
                 row=riga_riepilogo,
                 column=obiettivo_colonna,
@@ -448,13 +490,15 @@ def _crea_vincoli(sheet, pianificazione: dict) -> None:
 
 def _crea_info(sheet, struttura: str, anno: int, mese: int) -> None:
     sheet.append(["Report turni", f"{struttura} - {mese:02d}/{anno}"])
-    sheet.append(["Legenda turni", "M mattina · P pomeriggio · N notte · R riposo"])
+    sheet.append(["Legenda turni", "M mattina · P pomeriggio · N notte · S smonto (giorno dopo la notte) · R riposo"])
     sheet.append(["Legenda assenze", "F ferie · M malattia · CS congedo straordinario · R riposo"])
     sheet.append(["Nota codici", "M mattina è blu; M malattia è rosso."])
     sheet.append(["Riepilogo giornaliero", "Le righe finali del foglio Calendario riportano le coperture M, P e N per giorno."])
     sheet.append(["Riepilogo dipendenti", "Le colonne a destra mostrano turni, festivi, ore lavorate, credito assenze e saldo annuo."])
     sheet.append(["Credito assenze", "Ferie, malattia e congedo accreditano la durata del turno previsto; il riposo (R) vale zero ore."])
-    sheet.append(["Obiettivo annuale", "Per il personale di ruolo il riferimento è Ore settimanali × 52; lo scostamento cumulativo è riportato in Riepilogo."])
+    sheet.append(["Monte ore mensile", "Per il personale di ruolo è Ore settimanali × (giorni del mese ÷ 7). Lo scostamento in turni è evidenziato in rosso oltre il limite impostato nelle Regole."])
+    sheet.append(["Obiettivo progressivo", "Somma dei monte ore dei mesi validati e del mese corrente; lo scostamento cumulativo è riportato in Riepilogo."])
+    sheet.append(["Smonto e riposo", "Dopo la notte c'è lo smonto (S): non si lavora, ma non conta come giorno di riposo."])
     sheet.append(["Validazione", "I dati del foglio Excel sono una copia modificabile; non aggiornano l'archivio dell'app."])
     sheet.column_dimensions["A"].width = 25
     sheet.column_dimensions["B"].width = 110
