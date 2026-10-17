@@ -244,7 +244,7 @@ def _turni_precedenti(
     return risultato
 
 
-def genera_calendario(
+def _genera(
     personale: list[dict],
     regole: dict,
     anno: int,
@@ -253,8 +253,14 @@ def genera_calendario(
     storico_minuti: dict[str, int] | None = None,
     giorni_storico: int = 0,
     calendario_precedente: list[dict] | None = None,
-) -> tuple[list[dict], list[str]]:
-    """Genera il calendario mensile rispettando coperture e vincoli individuali.
+    numero_alternative: int = 1,
+    secondi_per_alternativa: int = 30,
+) -> tuple[list[list[dict]], list[str]]:
+    """Genera uno o più calendari mensili rispettando coperture e vincoli individuali.
+
+    Restituisce (lista di calendari, errori): ogni calendario è una lista di turni.
+    Le alternative rispettano tutte le regole obbligatorie, hanno una qualità vicina
+    alla migliore e differiscono tra loro per almeno il 15% delle assegnazioni.
 
     Regole obbligatorie:
     - al massimo un turno al giorno e riposo minimo tra un turno e l'altro;
@@ -759,6 +765,7 @@ def genera_calendario(
         ]
 
     # Dopo lo smonto si preferisce il pomeriggio
+    termini_smonto: list[tuple[object, int, int]] = []
     for nome in persone:
         for indice, giorno in enumerate(giorni):
             giorno_notte = giorno - 2 * una_giornata  # notte, smonto, poi questo giorno
@@ -776,27 +783,47 @@ def genera_calendario(
                 if not penalita or variabile is None:
                     continue
                 if notte_origine is None:
-                    termini.append((variabile, penalita, 1))
+                    termini_smonto.append((variabile, penalita, 1))
                 else:
-                    sgradito = model.NewBoolVar(f"dopo_smonto_{len(termini)}")
+                    sgradito = model.NewBoolVar(f"dopo_smonto_{len(termini_smonto)}")
                     model.Add(sgradito >= notte_origine + variabile - 1)
-                    termini.append((sgradito, penalita, 1))
+                    termini_smonto.append((sgradito, penalita, 1))
 
     # La riduzione del pomeriggio pesa più di tutto il resto messo insieme:
     # scatta solo se il personale non basta davvero.
-    massimo_resto = sum(peso * massimo for _, peso, massimo in termini)
+    tutti_i_termini = termini + termini_smonto
+    massimo_resto = sum(peso * massimo for _, peso, massimo in tutti_i_termini)
     peso_copertura = massimo_resto + 1
-    if termini or termini_copertura_pomeriggio:
+    if tutti_i_termini or termini_copertura_pomeriggio:
         model.Minimize(
-            sum(espressione * peso for espressione, peso, _ in termini)
+            sum(espressione * peso for espressione, peso, _ in tutti_i_termini)
             + sum(termini_copertura_pomeriggio) * peso_copertura
         )
 
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 30
-    solver.parameters.num_search_workers = 1
-    solver.parameters.random_seed = 42
-    stato = solver.Solve(model)
+    def risolvi(seme: int):
+        solver = cp_model.CpSolver()
+        solver.parameters.max_time_in_seconds = secondi_per_alternativa
+        solver.parameters.num_search_workers = 1
+        solver.parameters.random_seed = seme
+        return solver, solver.Solve(model)
+
+    def estrai(solver) -> list[dict]:
+        risultato = []
+        for (nome, giorno, turno), variabile in assegnazioni.items():
+            if solver.Value(variabile):
+                risultato.append({"Data": giorno.isoformat(), "Turno": turno, "Nome": nome})
+        risultato.sort(key=lambda riga: (riga["Data"], turni.index(riga["Turno"]), riga["Nome"]))
+        return risultato
+
+    def assegnazioni_attive(solver):
+        # i turni predeterminati sono uguali in tutte le proposte: non contano
+        return [
+            variabile
+            for chiave, variabile in assegnazioni.items()
+            if solver.Value(variabile) and chiave not in predet_set
+        ]
+
+    solver, stato = risolvi(42)
     if stato not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         if stato == cp_model.INFEASIBLE:
             return [], [
@@ -808,18 +835,173 @@ def genera_calendario(
             ]
         return [], ["Il calcolo del calendario non è riuscito entro il tempo disponibile."]
 
-    risultato = []
-    for (nome, giorno, turno), variabile in assegnazioni.items():
-        if solver.Value(variabile):
-            risultato.append(
-                {
-                    "Data": giorno.isoformat(),
-                    "Turno": turno,
-                    "Nome": nome,
-                }
+    soluzioni = [estrai(solver)]
+
+    if numero_alternative > 1:
+        # Le alternative non possono peggiorare la copertura, né aggiungere notti
+        # "notte, smonto, notte", e devono restare vicine alla qualità della migliore.
+        copertura_migliore = sum(solver.Value(v) for v in termini_copertura_pomeriggio)
+        smonto_migliore = sum(solver.Value(e) * peso for e, peso, _ in termini_smonto)
+        altri_migliori = sum(solver.Value(e) * peso for e, peso, _ in termini)
+        if termini_copertura_pomeriggio:
+            model.Add(sum(termini_copertura_pomeriggio) <= copertura_migliore)
+        if termini_smonto:
+            model.Add(
+                sum(e * peso for e, peso, _ in termini_smonto)
+                <= smonto_migliore + 2 * PENALITA_DOPO_SMONTO["Mattina"]
             )
-    risultato.sort(key=lambda riga: (riga["Data"], turni.index(riga["Turno"]), riga["Nome"]))
-    return risultato, []
+        if termini:
+            model.Add(
+                sum(e * peso for e, peso, _ in termini)
+                <= altri_migliori + max(400, altri_migliori // 30)
+            )
+        precedenti = assegnazioni_attive(solver)
+        for numero in range(1, numero_alternative):
+            diverse = max(10, int(len(precedenti) * 0.15))
+            if len(precedenti) < diverse:
+                break
+            model.Add(sum(precedenti) <= len(precedenti) - diverse)
+            solver, stato = risolvi(42 + numero)
+            if stato not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+                break  # non esistono altre soluzioni abbastanza diverse
+            soluzioni.append(estrai(solver))
+            precedenti = assegnazioni_attive(solver)
+    return soluzioni, []
+
+
+def genera_calendario(
+    personale: list[dict],
+    regole: dict,
+    anno: int,
+    mese: int,
+    pianificazione: dict,
+    storico_minuti: dict[str, int] | None = None,
+    giorni_storico: int = 0,
+    calendario_precedente: list[dict] | None = None,
+) -> tuple[list[dict], list[str]]:
+    """Genera il calendario migliore (una sola proposta)."""
+    soluzioni, errori = _genera(
+        personale, regole, anno, mese, pianificazione, storico_minuti,
+        giorni_storico, calendario_precedente, numero_alternative=1,
+    )
+    return (soluzioni[0] if soluzioni else []), errori
+
+
+def genera_alternative(
+    personale: list[dict],
+    regole: dict,
+    anno: int,
+    mese: int,
+    pianificazione: dict,
+    storico_minuti: dict[str, int] | None = None,
+    giorni_storico: int = 0,
+    calendario_precedente: list[dict] | None = None,
+    numero: int = 3,
+    secondi_per_alternativa: int = 30,
+) -> tuple[list[list[dict]], list[str]]:
+    """Genera fino a `numero` calendari validi e sensibilmente diversi tra loro."""
+    return _genera(
+        personale, regole, anno, mese, pianificazione, storico_minuti,
+        giorni_storico, calendario_precedente,
+        numero_alternative=max(1, numero),
+        secondi_per_alternativa=secondi_per_alternativa,
+    )
+
+
+def riepilogo_calendario(
+    personale: list[dict],
+    regole: dict,
+    anno: int,
+    mese: int,
+    pianificazione: dict,
+    assegnazioni: list[dict],
+    calendario_precedente: list[dict] | None = None,
+) -> tuple[dict, list[dict]]:
+    """Indicatori per confrontare le proposte e tabella per persona."""
+    persone = {
+        str(persona.get("Nome", "")).strip(): persona
+        for persona in personale
+        if str(persona.get("Nome", "")).strip()
+    }
+    try:
+        durate = {turno: durata_turno_minuti(regole, turno) for turno in TURNI}
+        tolleranza = tolleranza_minuti(regole)
+        extra = {}
+        for riga in pianificazione.get("festivi_extra", []):
+            if riga.get("Data"):
+                extra[_data(riga["Data"])] = str(riga.get("Descrizione") or "")
+    except (KeyError, StopIteration, TypeError, ValueError):
+        return {}, []
+    giorni = [
+        date(anno, mese, numero) for numero in range(1, calendar.monthrange(anno, mese)[1] + 1)
+    ]
+    una_giornata = timedelta(days=1)
+    lavoro: dict[tuple[str, date], str] = {}
+    pomeriggi_per_giorno: dict[date, int] = {}
+    for riga in assegnazioni:
+        nome = str(riga.get("Nome", "")).strip()
+        giorno = _data(riga["Data"])
+        lavoro[(nome, giorno)] = riga["Turno"]
+        if riga["Turno"] == "Pomeriggio":
+            pomeriggi_per_giorno[giorno] = pomeriggi_per_giorno.get(giorno, 0) + 1
+    prec = _turni_precedenti(calendario_precedente, giorni[0], persone)
+    tutti = {**prec, **lavoro}
+
+    copertura_pomeriggio = next(
+        (r for r in regole.get("copertura", []) if r.get("Turno") == "Pomeriggio"), {}
+    )
+    pomeriggi_ridotti = 0
+    for giorno in giorni:
+        fascia = "Festivo" if _turno_festivo(giorno, "Pomeriggio", extra) else "Feriale"
+        try:
+            richiesta = int(copertura_pomeriggio.get(fascia, 0) or 0)
+        except (TypeError, ValueError):
+            richiesta = 0
+        if pomeriggi_per_giorno.get(giorno, 0) < richiesta:
+            pomeriggi_ridotti += 1
+
+    notte_smonto_notte = sum(
+        1
+        for (nome, giorno), turno in lavoro.items()
+        if turno == "Notte" and tutti.get((nome, giorno - 2 * una_giornata)) == "Notte"
+    )
+
+    crediti, _ = crediti_assenza_minuti(pianificazione, regole, anno, mese)
+    righe = []
+    fuori_limite = 0
+    scostamento_massimo = 0.0
+    for nome, persona in persone.items():
+        propri = [(giorno, turno) for (n, giorno), turno in lavoro.items() if n == nome]
+        lavorati = sum(durate[turno] for _, turno in propri)
+        credito = crediti.get(nome, 0)
+        riga = {
+            "Nome": nome,
+            "Mattine": sum(1 for _, t in propri if t == "Mattina"),
+            "Pomeriggi": sum(1 for _, t in propri if t == "Pomeriggio"),
+            "Notti": sum(1 for _, t in propri if t == "Notte"),
+            "Festivi": sum(1 for giorno, t in propri if _turno_festivo(giorno, t, extra)),
+            "Ore lavorate": formatta_minuti(lavorati),
+            "Ore assenza": formatta_minuti(credito),
+            "Scostamento (turni)": None,
+        }
+        if persona.get("Categoria", "Di ruolo") == "Di ruolo":
+            try:
+                ore_settimanali = float(persona.get("Ore settimanali", 38) or 38)
+            except (TypeError, ValueError):
+                ore_settimanali = 38.0
+            scostamento = lavorati + credito - monte_ore_minuti(ore_settimanali, len(giorni))
+            riga["Scostamento (turni)"] = round(scostamento / durate["Mattina"], 1)
+            scostamento_massimo = max(scostamento_massimo, abs(scostamento) / durate["Mattina"])
+            if abs(scostamento) > tolleranza:
+                fuori_limite += 1
+        righe.append(riga)
+    indicatori = {
+        "pomeriggi_ridotti": pomeriggi_ridotti,
+        "notte_smonto_notte": notte_smonto_notte,
+        "persone_fuori_limite": fuori_limite,
+        "scostamento_massimo_turni": round(scostamento_massimo, 1),
+    }
+    return indicatori, righe
 
 
 def controlla_calendario(
