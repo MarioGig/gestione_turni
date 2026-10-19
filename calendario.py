@@ -178,6 +178,7 @@ def genera_calendario(
     pianificazione: dict,
     storico_minuti: dict[str, int] | None = None,
     assegnazioni_precedenti: list[dict] | None = None,
+    calendari_esclusi: list[list[dict]] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Genera il calendario mensile rispettando coperture e vincoli individuali."""
     turni = ("Mattina", "Pomeriggio", "Notte")
@@ -648,7 +649,12 @@ def genera_calendario(
         model.AddAbsEquality(scarto, differenza)
         termini_saldo_ore.append(scarto)
 
-    if termini_obiettivo or termini_saldo_ore or termini_copertura_pomeriggio:
+    if (
+        termini_obiettivo
+        or termini_saldo_ore
+        or termini_copertura_mattina
+        or termini_copertura_pomeriggio
+    ):
         peso_equita = 1
         peso_saldo_ore = massimo_scarto_equita + 1
         massimo_scarto_saldo = 1_000_000 * len(termini_saldo_ore)
@@ -691,6 +697,25 @@ def genera_calendario(
     if errori:
         return [], errori
 
+    for calendario_escluso in calendari_esclusi or []:
+        turni_esclusi = {
+            (str(riga["Nome"]).strip(), _data(riga["Data"]), riga["Turno"])
+            for riga in calendario_escluso
+        }
+        selezionati = [
+            variabile
+            for chiave, variabile in assegnazioni.items()
+            if chiave in turni_esclusi
+        ]
+        non_selezionati = [
+            variabile
+            for chiave, variabile in assegnazioni.items()
+            if chiave not in turni_esclusi
+        ]
+        model.Add(
+            sum(selezionati) - sum(non_selezionati) <= len(selezionati) - 1
+        )
+
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 30
     solver.parameters.num_search_workers = 1
@@ -717,3 +742,33 @@ def genera_calendario(
             )
     risultato.sort(key=lambda riga: (riga["Data"], turni.index(riga["Turno"]), riga["Nome"]))
     return risultato, []
+
+
+def genera_calendari_alternativi(
+    personale: list[dict],
+    regole: dict,
+    anno: int,
+    mese: int,
+    pianificazione: dict,
+    storico_minuti: dict[str, int] | None = None,
+    assegnazioni_precedenti: list[dict] | None = None,
+) -> tuple[list[list[dict]], list[str]]:
+    """Genera fino a tre calendari validi e distinti per lo stesso mese."""
+    alternative = []
+    for _ in range(3):
+        calendario, errori = genera_calendario(
+            personale,
+            regole,
+            anno,
+            mese,
+            pianificazione,
+            storico_minuti=storico_minuti,
+            assegnazioni_precedenti=assegnazioni_precedenti,
+            calendari_esclusi=alternative,
+        )
+        if errori:
+            if alternative and errori[0].startswith("Non esiste un calendario"):
+                break
+            return [], errori
+        alternative.append(calendario)
+    return alternative, []
