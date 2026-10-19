@@ -13,16 +13,6 @@ CODICI_ASSENZA = {
     "Permesso": "CS",
 }
 
-TURNI = ("Mattina", "Pomeriggio", "Notte")
-
-# Valori di partenza delle nuove regole (modificabili dalla scheda "Regole")
-SCOSTAMENTO_MAX_TURNI = 2  # massimo scostamento dal monte ore mensile, in turni
-MAX_TURNI_CONSECUTIVI = 6  # dopo 6 turni di lavoro serve 1 giorno di riposo
-
-# Penalità (in "minuti equivalenti") per il turno assegnato il giorno dopo lo smonto.
-# Il pomeriggio è il turno preferito e non ha penalità.
-PENALITA_DOPO_SMONTO = {"Mattina": 60, "Pomeriggio": 0, "Notte": 600}
-
 
 def festivita_nazionali(anno: int) -> dict[date, str]:
     fisse = {
@@ -78,32 +68,6 @@ def durata_turno_minuti(regole: dict, turno: str) -> int:
 
 def codice_assenza(tipo: str | None) -> str:
     return CODICI_ASSENZA.get(str(tipo), "CS")
-
-
-# ---------- Monte ore ----------
-def monte_ore_minuti(ore_settimanali: float, giorni: int) -> int:
-    """Monte ore per un periodo: ore settimanali x (giorni / 7), cioè settimane e frazioni."""
-    return int(round(float(ore_settimanali) * 60 * giorni / 7))
-
-
-def tolleranza_minuti(regole: dict) -> int:
-    """Scostamento massimo ammesso dal monte ore mensile: N turni (di mattina) in minuti."""
-    turni_ammessi = int(regole.get("scostamento_max_turni", SCOSTAMENTO_MAX_TURNI))
-    return turni_ammessi * durata_turno_minuti(regole, "Mattina")
-
-
-def giorni_obiettivo(anno: int, mese: int, mesi_storico) -> int:
-    """Giorni su cui calcolare l'obiettivo progressivo: mesi già validati + mese corrente."""
-    giorni = calendar.monthrange(anno, mese)[1]
-    return giorni + sum(
-        calendar.monthrange(anno, numero)[1] for numero in mesi_storico if numero < mese
-    )
-
-
-def formatta_minuti(minuti: int) -> str:
-    segno = "-" if minuti < 0 else ""
-    valore = abs(int(minuti))
-    return f"{segno}{valore // 60}h{valore % 60:02d}"
 
 
 def crediti_assenza_minuti(
@@ -206,77 +170,17 @@ def _turno_festivo(giorno: date, turno: str, extra: dict[date, str]) -> bool:
     )
 
 
-def _riposo_insufficiente(
-    giorno_a: date,
-    turno_a: str,
-    giorno_b: date,
-    turno_b: str,
-    orari: dict[str, tuple[str, str]],
-    riposo_minuti: int,
-) -> bool:
-    """True se tra i due turni passano meno ore del riposo minimo (o si sovrappongono)."""
-    inizio_a, fine_a = _intervallo_turno(giorno_a, *orari[turno_a])
-    inizio_b, fine_b = _intervallo_turno(giorno_b, *orari[turno_b])
-    if fine_a <= inizio_b:
-        pausa = inizio_b - fine_a
-    elif fine_b <= inizio_a:
-        pausa = inizio_a - fine_b
-    else:
-        return True
-    return pausa < timedelta(minutes=riposo_minuti)
-
-
-def _turni_precedenti(
-    calendario_precedente: list[dict] | None,
-    primo_giorno: date,
-    nomi,
-) -> dict[tuple[str, date], str]:
-    """Turni degli ultimi 7 giorni del mese precedente, per garantire la continuità."""
-    risultato: dict[tuple[str, date], str] = {}
-    for riga in calendario_precedente or []:
-        try:
-            giorno = _data(riga["Data"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        nome = str(riga.get("Nome", "")).strip()
-        if nome in nomi and primo_giorno - timedelta(days=7) <= giorno < primo_giorno:
-            risultato[(nome, giorno)] = str(riga.get("Turno"))
-    return risultato
-
-
-def _genera(
+def genera_calendario(
     personale: list[dict],
     regole: dict,
     anno: int,
     mese: int,
     pianificazione: dict,
     storico_minuti: dict[str, int] | None = None,
-    giorni_storico: int = 0,
-    calendario_precedente: list[dict] | None = None,
-    numero_alternative: int = 1,
-    secondi_per_alternativa: int = 30,
-) -> tuple[list[list[dict]], list[str]]:
-    """Genera uno o più calendari mensili rispettando coperture e vincoli individuali.
-
-    Restituisce (lista di calendari, errori): ogni calendario è una lista di turni.
-    Le alternative rispettano tutte le regole obbligatorie, hanno una qualità vicina
-    alla migliore e differiscono tra loro per almeno il 15% delle assegnazioni.
-
-    Regole obbligatorie:
-    - al massimo un turno al giorno e riposo minimo tra un turno e l'altro;
-    - dopo la notte c'è lo smonto: il giorno successivo non si lavora (quindi niente
-      seconda notte di fila);
-    - ogni 6 turni di lavoro almeno 1 giorno di riposo (lo smonto non conta come riposo);
-    - il monte ore del mese (ore settimanali x giorni / 7) non può essere superato
-      di oltre N turni (scostamento_max_turni, di partenza 2).
-    Regole preferenziali, in ordine di importanza:
-    - se il personale non basta si riduce per primo il pomeriggio, solo se serve;
-    - la copertura minima di mattina e notte non si riduce mai;
-    - dopo lo smonto si preferisce il pomeriggio;
-    - il monte ore mensile viene avvicinato il più possibile (anche verso il basso);
-    - equità tra le persone.
-    """
-    turni = TURNI
+    assegnazioni_precedenti: list[dict] | None = None,
+) -> tuple[list[dict], list[str]]:
+    """Genera il calendario mensile rispettando coperture e vincoli individuali."""
+    turni = ("Mattina", "Pomeriggio", "Notte")
     persone = {
         str(persona.get("Nome", "")).strip(): persona
         for persona in personale
@@ -334,50 +238,56 @@ def _genera(
         for inizio, fine in orari.values():
             time.fromisoformat(inizio)
             time.fromisoformat(fine)
-        riposo = int(regole.get("riposo_minimo_ore", 11)) * 60  # in minuti
-        max_consecutivi = int(regole.get("max_turni_consecutivi", MAX_TURNI_CONSECUTIVI))
-        durate = {turno: durata_turno_minuti(regole, turno) for turno in turni}
-        tolleranza = tolleranza_minuti(regole)
-    except (KeyError, StopIteration, TypeError, ValueError):
-        return [], ["Controlla le regole: mancano orari o valori validi per uno o più turni."]
-    if max_consecutivi < 1:
-        return [], ["I turni consecutivi prima del riposo devono essere almeno 1."]
-    if tolleranza < 0:
-        return [], ["Lo scostamento massimo dal monte ore non può essere negativo."]
+        riposo = int(regole.get("riposo_minimo_ore", 11)) * 60
+    except (KeyError, TypeError, ValueError):
+        return [], ["Controlla le regole: mancano orari validi per uno o più turni."]
 
     giorni = [
         date(anno, mese, giorno)
         for giorno in range(1, calendar.monthrange(anno, mese)[1] + 1)
     ]
-    una_giornata = timedelta(days=1)
-    prec = _turni_precedenti(calendario_precedente, giorni[0], persone)
+    giorno_inizio_mese = giorni[0]
+    turno_precedente: set[tuple[str, date, str]] = set()
+    for riga in assegnazioni_precedenti or []:
+        nome = str(riga.get("Nome", "")).strip()
+        try:
+            giorno = _data(riga["Data"])
+        except (KeyError, TypeError, ValueError):
+            return [], ["Il calendario precedente contiene una data non valida."]
+        turno = riga.get("Turno")
+        if nome not in persone:
+            return [], [f"Il calendario precedente indica una persona non presente: {nome}."]
+        if turno not in turni:
+            return [], [f"Il calendario precedente contiene un turno non valido per {nome}."]
+        if giorno < giorno_inizio_mese and giorno >= giorno_inizio_mese - timedelta(days=6):
+            turno_precedente.add((nome, giorno, turno))
 
     richieste: dict[tuple[date, str], int] = {}
     minimi_richiesti: dict[tuple[date, str], int] = {}
-    massimo_scarto_copertura = 0
+    termini_copertura_pomeriggio = []
+    termini_copertura_mattina = []
     for giorno in giorni:
         for turno in turni:
             fascia = "Festivo" if _turno_festivo(giorno, turno, extra) else "Feriale"
             try:
-                richiesta = int(coperture.get(turno, {}).get(fascia, 0) or 0)
+                richiesta = int(coperture[turno].get(fascia, 0) or 0)
             except (TypeError, ValueError):
                 return [], [f"Copertura non valida per il turno {turno}."]
             if richiesta < 0:
                 return [], [f"La copertura del turno {turno} non può essere negativa."]
             richieste[(giorno, turno)] = richiesta
-            minimo = richiesta
-            # Solo il pomeriggio feriale può scendere sotto la copertura piena
-            if turno == "Pomeriggio" and fascia == "Feriale":
-                try:
-                    minimo = int(regole.get("pomeriggio_feriale_minimo", richiesta))
-                except (TypeError, ValueError):
-                    return [], ["Il minimo del pomeriggio feriale non è valido."]
-                if minimo < 0 or minimo > richiesta:
-                    return [], [
-                        "Il minimo del pomeriggio feriale deve essere compreso "
-                        "tra zero e la copertura feriale configurata."
-                    ]
-                massimo_scarto_copertura += richiesta - minimo
+            minimo = 0 if turno == "Pomeriggio" else richiesta
+            if (
+                turno == "Mattina"
+                and fascia == "Feriale"
+                and richiesta > 4
+                and any(
+                    inizio.date() <= giorno < fine.date()
+                    for intervalli in assenze.values()
+                    for inizio, fine in intervalli
+                )
+            ):
+                minimo = 4
             minimi_richiesti[(giorno, turno)] = minimo
 
     quote = {
@@ -403,17 +313,6 @@ def _genera(
     if errori:
         return [], errori
 
-    def conflitto_con_mese_precedente(nome: str, giorno: date, turno: str) -> str | None:
-        for (nome_p, giorno_p), turno_p in prec.items():
-            if nome_p != nome:
-                continue
-            if turno_p == "Notte" and giorno == giorno_p + una_giornata:
-                return "smonto"
-            if _riposo_insufficiente(giorno_p, turno_p, giorno, turno, orari, riposo):
-                return "riposo"
-        return None
-
-    # ---------- Controllo dei turni predeterminati ----------
     predeterminati = []
     for riga in pianificazione.get("predeterminati", []):
         nome = str(riga.get("Nome", "")).strip()
@@ -454,17 +353,6 @@ def _genera(
                 f"{nome} ha un turno predeterminato durante un'assenza "
                 f"il {giorno:%d/%m/%Y} ({turno.lower()})."
             )
-        motivo = conflitto_con_mese_precedente(nome, giorno, turno)
-        if motivo == "smonto":
-            errori.append(
-                f"{nome} è in smonto il {giorno:%d/%m/%Y} (notte dell'ultimo giorno del "
-                "mese precedente): non può avere un turno predeterminato."
-            )
-        elif motivo == "riposo":
-            errori.append(
-                f"Il turno predeterminato di {nome} del {giorno:%d/%m/%Y} non rispetta il "
-                "riposo minimo dopo l'ultimo turno del mese precedente."
-            )
     predet_per_slot: dict[tuple[date, str], int] = {}
     predet_per_persona_giorno: dict[tuple[str, date], int] = {}
     for nome, giorno, turno in predeterminati:
@@ -484,48 +372,51 @@ def _genera(
                 f"{nome} ha più di un turno predeterminato il {giorno:%d/%m/%Y}; "
                 "è consentito un solo turno al giorno."
             )
-    if errori:
-        return [], errori
-
-    # Riposo minimo, smonto e giorni consecutivi tra i turni predeterminati della stessa persona
+    for nome, giorno, turno in predeterminati:
+        if turno == "Notte" and (nome, giorno + timedelta(days=1)) in predet_per_persona_giorno:
+            errori.append(
+                f"{nome} deve avere lo smonto il {giorno + timedelta(days=1):%d/%m/%Y} "
+                "dopo la notte predeterminata."
+            )
     for nome in persone:
-        propri = sorted(
-            (giorno, turno) for nome_p, giorno, turno in predeterminati if nome_p == nome
-        )
-        for indice, (giorno_a, turno_a) in enumerate(propri):
-            for giorno_b, turno_b in propri[indice + 1 :]:
-                if giorno_a == giorno_b:
-                    continue
-                if turno_a == "Notte" and giorno_b == giorno_a + una_giornata:
-                    errori.append(
-                        f"{nome} ha una notte predeterminata il {giorno_a:%d/%m/%Y} e un turno "
-                        f"il {giorno_b:%d/%m/%Y}, ma dopo la notte c'è lo smonto."
-                    )
-                elif _riposo_insufficiente(giorno_a, turno_a, giorno_b, turno_b, orari, riposo):
-                    errori.append(
-                        f"I turni predeterminati di {nome} del {giorno_a:%d/%m/%Y} "
-                        f"e {giorno_b:%d/%m/%Y} non rispettano il riposo minimo."
-                    )
-        serie = 0
-        precedente = None
-        for giorno, _ in propri:
-            serie = serie + 1 if precedente and giorno == precedente + una_giornata else 1
-            if serie == max_consecutivi + 1:
+        for giorno_finale in giorni:
+            giorni_lavorati = {
+                giorno_storico
+                for nome_storico, giorno_storico, _ in turno_precedente
+                if nome_storico == nome
+                and giorno_finale - timedelta(days=6) <= giorno_storico < giorno_inizio_mese
+            }
+            giorni_lavorati.update(
+                giorno_predeterminato
+                for nome_predeterminato, giorno_predeterminato in predet_per_persona_giorno
+                if nome_predeterminato == nome
+                and giorno_finale - timedelta(days=6)
+                <= giorno_predeterminato
+                <= giorno_finale
+            )
+            if len(giorni_lavorati) > 6:
                 errori.append(
-                    f"{nome} ha più di {max_consecutivi} turni predeterminati consecutivi "
-                    f"fino al {giorno:%d/%m/%Y}: serve un giorno di riposo."
+                    f"{nome} supera sei giorni lavorati nella finestra di sette giorni "
+                    f"che termina il {giorno_finale:%d/%m/%Y}."
                 )
-            precedente = giorno
+        if any(
+            nome_storico == nome
+            and giorno_storico == giorno_inizio_mese - timedelta(days=1)
+            and turno_storico == "Notte"
+            for nome_storico, giorno_storico, turno_storico in turno_precedente
+        ) and (nome, giorno_inizio_mese) in predet_per_persona_giorno:
+            errori.append(
+                f"{nome} deve avere lo smonto il {giorno_inizio_mese:%d/%m/%Y} "
+                "dopo la notte del mese precedente."
+            )
     if errori:
         return [], errori
 
-    # ---------- Modello ----------
     from ortools.sat.python import cp_model
 
     model = cp_model.CpModel()
     assegnazioni = {}
     candidati_per_slot = {}
-    termini_copertura_pomeriggio = []
     for giorno in giorni:
         for turno in turni:
             slot = (giorno, turno)
@@ -545,8 +436,6 @@ def _genera(
                     for assenza_inizio, assenza_fine in assenze[nome]
                 ):
                     continue
-                if conflitto_con_mese_precedente(nome, giorno, turno):
-                    continue
                 variabile = model.NewBoolVar(f"x_{len(assegnazioni)}")
                 assegnazioni[(nome, giorno, turno)] = variabile
                 candidati.append(nome)
@@ -562,10 +451,18 @@ def _genera(
             assegnati = sum(assegnazioni[(nome, giorno, turno)] for nome in candidati)
             model.Add(assegnati >= minimi_richiesti[slot])
             model.Add(assegnati <= richieste[slot])
-            if richieste[slot] > minimi_richiesti[slot]:
+            if turno == "Mattina" and richieste[slot] > minimi_richiesti[slot]:
                 scopertura = model.NewIntVar(
                     0,
-                    richieste[slot] - minimi_richiesti[slot],
+                    richieste[slot],
+                    f"scopertura_mattina_{len(termini_copertura_mattina)}",
+                )
+                model.Add(scopertura == richieste[slot] - assegnati)
+                termini_copertura_mattina.append(scopertura)
+            if turno == "Pomeriggio" and richieste[slot] > minimi_richiesti[slot]:
+                scopertura = model.NewIntVar(
+                    0,
+                    richieste[slot],
                     f"scopertura_pomeriggio_{len(termini_copertura_pomeriggio)}",
                 )
                 model.Add(scopertura == richieste[slot] - assegnati)
@@ -573,8 +470,7 @@ def _genera(
     if errori:
         return [], errori
 
-    # Un solo turno al giorno e quote mensili per persona
-    for nome in persone:
+    for nome, persona in persone.items():
         for giorno in giorni:
             turni_giorno = [
                 assegnazioni[(nome, giorno, turno)]
@@ -583,6 +479,54 @@ def _genera(
             ]
             if turni_giorno:
                 model.Add(sum(turni_giorno) <= 1)
+            notte = assegnazioni.get((nome, giorno, "Notte"))
+            giorno_successivo = giorno + timedelta(days=1)
+            if notte is not None and giorno_successivo in giorni:
+                turni_successivi = [
+                    assegnazioni[(nome, giorno_successivo, turno)]
+                    for turno in turni
+                    if (nome, giorno_successivo, turno) in assegnazioni
+                ]
+                if turni_successivi:
+                    model.Add(notte + sum(turni_successivi) <= 1)
+
+        for giorno_finale in giorni:
+            finestra = [
+                giorno_finale - timedelta(days=offset)
+                for offset in range(6, -1, -1)
+            ]
+            turni_finestra = []
+            turni_storici = 0
+            for giorno_finestra in finestra:
+                if giorno_finestra < giorno_inizio_mese:
+                    turni_storici += any(
+                        nome_storico == nome and data_storica == giorno_finestra
+                        for nome_storico, data_storica, _ in turno_precedente
+                    )
+                    continue
+                turni_finestra.extend(
+                    assegnazioni[(nome, giorno_finestra, turno)]
+                    for turno in turni
+                    if (nome, giorno_finestra, turno) in assegnazioni
+                )
+            if turni_finestra:
+                model.Add(sum(turni_finestra) + turni_storici <= 6)
+
+        notte_precedente = any(
+            nome_storico == nome
+            and data_storica == giorno_inizio_mese - timedelta(days=1)
+            and turno_storico == "Notte"
+            for nome_storico, data_storica, turno_storico in turno_precedente
+        )
+        if notte_precedente:
+            turni_primo_giorno = [
+                assegnazioni[(nome, giorno_inizio_mese, turno)]
+                for turno in turni
+                if (nome, giorno_inizio_mese, turno) in assegnazioni
+            ]
+            if turni_primo_giorno:
+                model.Add(sum(turni_primo_giorno) == 0)
+
         for turno in turni:
             variabili = [
                 variabile
@@ -598,8 +542,6 @@ def _genera(
     if errori:
         return [], errori
 
-    # Riposo minimo tra un turno e l'altro
-    orizzonte_giorni = (max(durate.values()) + riposo) // (24 * 60) + 2
     for nome in persone:
         disponibili = [
             (giorno, turno, assegnazioni[(nome, giorno, turno)])
@@ -608,76 +550,27 @@ def _genera(
             if (nome, giorno, turno) in assegnazioni
         ]
         for indice, (giorno_a, turno_a, var_a) in enumerate(disponibili):
+            inizio_a, fine_a = _intervallo_turno(giorno_a, *orari[turno_a])
             for giorno_b, turno_b, var_b in disponibili[indice + 1 :]:
-                if (giorno_b - giorno_a).days > orizzonte_giorni:
-                    break
-                if giorno_a == giorno_b:
-                    continue
-                if _riposo_insufficiente(giorno_a, turno_a, giorno_b, turno_b, orari, riposo):
+                inizio_b, fine_b = _intervallo_turno(giorno_b, *orari[turno_b])
+                if fine_a <= inizio_b:
+                    riposo_insufficiente = (inizio_b - fine_a).total_seconds() < riposo * 60
+                elif fine_b <= inizio_a:
+                    riposo_insufficiente = (inizio_a - fine_b).total_seconds() < riposo * 60
+                else:
+                    riposo_insufficiente = True
+                if riposo_insufficiente:
                     model.Add(var_a + var_b <= 1)
 
-    # Smonto: il giorno dopo una notte non si lavora (nemmeno un'altra notte)
-    for nome in persone:
-        for indice, giorno in enumerate(giorni[:-1]):
-            notte = assegnazioni.get((nome, giorno, "Notte"))
-            if notte is None:
-                continue
-            for turno in turni:
-                successivo = assegnazioni.get((nome, giorni[indice + 1], turno))
-                if successivo is not None:
-                    model.Add(notte + successivo <= 1)
-
-    # Ogni `max_consecutivi` turni di lavoro serve 1 giorno di riposo vero:
-    # un giorno senza turno e che non sia lo smonto.
-    riposi = {}
-    for numero_persona, nome in enumerate(persone):
-        for indice, giorno in enumerate(giorni):
-            riposo_var = model.NewBoolVar(f"riposo_{numero_persona}_{indice}")
-            lavoro = [
-                assegnazioni[(nome, giorno, turno)]
-                for turno in turni
-                if (nome, giorno, turno) in assegnazioni
-            ]
-            if lavoro:
-                model.Add(riposo_var + sum(lavoro) <= 1)
-            if indice > 0:
-                notte_ieri = assegnazioni.get((nome, giorni[indice - 1], "Notte"))
-                if notte_ieri is not None:
-                    model.Add(riposo_var + notte_ieri <= 1)
-            elif prec.get((nome, giorno - una_giornata)) == "Notte":
-                model.Add(riposo_var == 0)
-            riposi[(nome, indice)] = riposo_var
-    lunghezza_finestra = max_consecutivi + 1
-    for nome in persone:
-        for inizio_finestra in range(-(lunghezza_finestra - 1), len(giorni) - lunghezza_finestra + 1):
-            if inizio_finestra + lunghezza_finestra - 1 < 0:
-                continue
-            gia_soddisfatta = False
-            variabili_riposo = []
-            for indice in range(inizio_finestra, inizio_finestra + lunghezza_finestra):
-                if indice >= 0:
-                    variabili_riposo.append(riposi[(nome, indice)])
-                    continue
-                giorno_prec = giorni[0] + timedelta(days=indice)
-                ha_lavorato = (nome, giorno_prec) in prec
-                in_smonto = prec.get((nome, giorno_prec - una_giornata)) == "Notte"
-                if not ha_lavorato and not in_smonto:
-                    gia_soddisfatta = True
-                    break
-            if not gia_soddisfatta and variabili_riposo:
-                model.Add(sum(variabili_riposo) >= 1)
-
-    # ---------- Obiettivo ----------
-    termini: list[tuple[object, int, int]] = []  # (espressione, peso, valore massimo)
-
-    # Equità: a ognuno una quota di turni proporzionale alla sua disponibilità
+    termini_obiettivo = []
+    massimo_scarto_equita = 0
     for turno in turni:
         slot_totali = sum(richieste[(giorno, turno)] for giorno in giorni)
         opportunita = {
             nome: sum(
-                1
+                (giorno, turno) in candidati_per_slot
+                and nome in candidati_per_slot[(giorno, turno)]
                 for giorno in giorni
-                if nome in candidati_per_slot.get((giorno, turno), ())
             )
             for nome in persone
         }
@@ -692,484 +585,135 @@ def _genera(
                 for giorno in giorni
                 if (nome, giorno, turno) in assegnazioni
             )
-            ideale = round(10 * slot_totali * disponibili / opportunita_totali)
-            massimo = 10 * max(len(giorni), slot_totali)
-            scarto = model.NewIntVar(0, massimo, f"scarto_equita_{len(termini)}")
-            model.Add(scarto >= 10 * conteggio - ideale)
-            model.Add(scarto >= ideale - 10 * conteggio)
-            termini.append((scarto, 2, massimo))
-
-    # Monte ore mensile: tetto rigido a +N turni, poi avvicinamento al monte ore
+            scarto = model.NewIntVar(0, slot_totali * opportunita_totali, f"scarto_{len(termini_obiettivo)}")
+            massimo_scarto_equita += slot_totali * opportunita_totali
+            differenza = model.NewIntVar(
+                -slot_totali * opportunita_totali,
+                slot_totali * opportunita_totali,
+                f"differenza_{len(termini_obiettivo)}",
+            )
+            model.Add(differenza == conteggio * opportunita_totali - slot_totali * disponibili)
+            model.AddAbsEquality(scarto, differenza)
+            termini_obiettivo.append(scarto)
+    termini_saldo_ore = []
     storico_minuti = storico_minuti or {}
-    capacita_ruolo = 0
+    giorno_fine_mese = giorni[-1]
+    giorni_anno = 366 if calendar.isleap(anno) else 365
+    giorno_progressivo = giorno_fine_mese.timetuple().tm_yday
     for nome, persona in persone.items():
         if persona.get("Categoria", "Di ruolo") != "Di ruolo":
             continue
         try:
-            ore_settimanali = float(persona.get("Ore settimanali", 38) or 38)
+            ore_settimanali = persona.get("Ore settimanali")
+            if ore_settimanali is None:
+                ore_settimanali = 38
+            ore_settimanali = float(ore_settimanali)
+            contratto_annuo_minuti = int(round(float(ore_settimanali) * 52 * 60))
         except (TypeError, ValueError):
             return [], [f"Ore settimanali non valide per {nome}."]
-        credito = int(crediti_mese.get(nome, 0))
-        obiettivo_mese = monte_ore_minuti(ore_settimanali, len(giorni))
-        tetto = max(obiettivo_mese + tolleranza, credito)
-        soglia_bassa = min(obiettivo_mese - tolleranza, tetto)
-        capacita_ruolo += tetto - credito
-        variabili_ore = [
-            (assegnazioni[(nome, giorno, turno)], durate[turno])
+        if contratto_annuo_minuti < 0:
+            return [], [f"Ore settimanali non valide per {nome}."]
+        try:
+            durata_turno_diurno = durata_turno_minuti(regole, "Mattina")
+        except (KeyError, StopIteration, TypeError, ValueError):
+            return [], ["Non riesco a calcolare la durata del turno diurno."]
+        obiettivo_mensile = round(ore_settimanali * len(giorni) / 7 * 60)
+        tolleranza_mensile = 2 * durata_turno_diurno
+        obiettivo_progressivo = round(
+            contratto_annuo_minuti * giorno_progressivo / giorni_anno
+        )
+        ore_assegnate = sum(
+            assegnazioni[(nome, giorno, turno)] * durata_turno_minuti(regole, turno)
             for giorno in giorni
             for turno in turni
             if (nome, giorno, turno) in assegnazioni
-        ]
-        if not variabili_ore:
-            continue
-        totale = sum(variabile * durata for variabile, durata in variabili_ore) + credito
-        model.Add(totale <= tetto)
+        )
+        model.Add(
+            ore_assegnate + int(crediti_mese.get(nome, 0))
+            >= max(0, obiettivo_mensile - tolleranza_mensile)
+        )
+        model.Add(
+            ore_assegnate + int(crediti_mese.get(nome, 0))
+            <= obiettivo_mensile + tolleranza_mensile
+        )
+        differenza = model.NewIntVar(-1_000_000, 1_000_000, f"saldo_{len(termini_saldo_ore)}")
+        scarto = model.NewIntVar(0, 1_000_000, f"scarto_saldo_{len(termini_saldo_ore)}")
+        model.Add(
+            differenza
+            == int(storico_minuti.get(nome, 0))
+            + int(crediti_mese.get(nome, 0))
+            + ore_assegnate
+            - obiettivo_progressivo
+        )
+        model.AddAbsEquality(scarto, differenza)
+        termini_saldo_ore.append(scarto)
 
-        # sotto la soglia di -N turni: penalità forte (non sempre evitabile se i turni
-        # richiesti sono meno delle ore dovute)
-        if soglia_bassa > 0:
-            sotto = model.NewIntVar(0, soglia_bassa, f"sotto_soglia_{len(termini)}")
-            model.Add(sotto >= soglia_bassa - totale)
-            termini.append((sotto, 5, soglia_bassa))
-
-        # scarto dal monte ore del mese
-        limite_mese = 100_000
-        scarto_mese = model.NewIntVar(0, limite_mese, f"scarto_mese_{len(termini)}")
-        model.Add(scarto_mese >= totale - obiettivo_mese)
-        model.Add(scarto_mese >= obiettivo_mese - totale)
-        termini.append((scarto_mese, 1, limite_mese))
-
-        # saldo progressivo: recupera gli scostamenti dei mesi già validati
-        obiettivo_progressivo = monte_ore_minuti(ore_settimanali, giorni_storico + len(giorni))
-        limite_saldo = 1_000_000
-        scarto_saldo = model.NewIntVar(0, limite_saldo, f"scarto_saldo_{len(termini)}")
-        saldo = int(storico_minuti.get(nome, 0)) + totale - obiettivo_progressivo
-        model.Add(scarto_saldo >= saldo)
-        model.Add(scarto_saldo >= -saldo)
-        termini.append((scarto_saldo, 1, limite_saldo))
-
-    # Controllo preliminare: i turni feriali possono essere coperti solo dal personale di ruolo
-    minuti_feriali_minimi = sum(
-        minimi_richiesti[(giorno, turno)] * durate[turno]
-        for giorno in giorni
-        for turno in turni
-        if not _turno_festivo(giorno, turno, extra)
-    )
-    if minuti_feriali_minimi > capacita_ruolo:
-        return [], [
-            "Il personale di ruolo non basta a coprire i turni feriali anche riducendo "
-            f"il pomeriggio al minimo: servono almeno {formatta_minuti(minuti_feriali_minimi)}, "
-            f"mentre il monte ore del mese, con lo scostamento massimo di "
-            f"{int(regole.get('scostamento_max_turni', SCOSTAMENTO_MAX_TURNI))} turni, "
-            f"ne consente al massimo {formatta_minuti(capacita_ruolo)}."
-        ]
-
-    # Dopo lo smonto si preferisce il pomeriggio
-    termini_smonto: list[tuple[object, int, int]] = []
-    for nome in persone:
-        for indice, giorno in enumerate(giorni):
-            giorno_notte = giorno - 2 * una_giornata  # notte, smonto, poi questo giorno
-            if indice >= 2:
-                notte_origine = assegnazioni.get((nome, giorno_notte, "Notte"))
-                if notte_origine is None:
-                    continue
-            elif prec.get((nome, giorno_notte)) == "Notte":
-                notte_origine = None  # notte del mese precedente: è già un fatto
-            else:
-                continue
-            for turno in turni:
-                penalita = PENALITA_DOPO_SMONTO[turno]
-                variabile = assegnazioni.get((nome, giorno, turno))
-                if not penalita or variabile is None:
-                    continue
-                if notte_origine is None:
-                    termini_smonto.append((variabile, penalita, 1))
-                else:
-                    sgradito = model.NewBoolVar(f"dopo_smonto_{len(termini_smonto)}")
-                    model.Add(sgradito >= notte_origine + variabile - 1)
-                    termini_smonto.append((sgradito, penalita, 1))
-
-    # La riduzione del pomeriggio pesa più di tutto il resto messo insieme:
-    # scatta solo se il personale non basta davvero.
-    tutti_i_termini = termini + termini_smonto
-    massimo_resto = sum(peso * massimo for _, peso, massimo in tutti_i_termini)
-    peso_copertura = massimo_resto + 1
-    if tutti_i_termini or termini_copertura_pomeriggio:
+    if termini_obiettivo or termini_saldo_ore or termini_copertura_pomeriggio:
+        peso_equita = 1
+        peso_saldo_ore = massimo_scarto_equita + 1
+        massimo_scarto_saldo = 1_000_000 * len(termini_saldo_ore)
+        peso_copertura = massimo_scarto_saldo * peso_saldo_ore + massimo_scarto_equita + 1
+        massimo_copertura_pomeriggio = sum(
+            richieste[(giorno, "Pomeriggio")] for giorno in giorni
+        )
+        peso_copertura_mattina = (
+            massimo_copertura_pomeriggio * peso_copertura
+            + massimo_scarto_saldo * peso_saldo_ore
+            + massimo_scarto_equita
+            + 1
+        )
         model.Minimize(
-            sum(espressione * peso for espressione, peso, _ in tutti_i_termini)
+            sum(termini_copertura_mattina) * peso_copertura_mattina
             + sum(termini_copertura_pomeriggio) * peso_copertura
+            + sum(termini_saldo_ore) * peso_saldo_ore
+            + sum(termini_obiettivo) * peso_equita
         )
 
-    def risolvi(seme: int):
-        solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = secondi_per_alternativa
-        solver.parameters.num_search_workers = 1
-        solver.parameters.random_seed = seme
-        return solver, solver.Solve(model)
+    for indice, (nome_a, giorno_a, turno_a) in enumerate(predeterminati):
+        for nome_b, giorno_b, turno_b in predeterminati[indice + 1 :]:
+            if nome_a != nome_b:
+                continue
+            if giorno_a == giorno_b:
+                continue
+            inizio_a, fine_a = _intervallo_turno(giorno_a, *orari[turno_a])
+            inizio_b, fine_b = _intervallo_turno(giorno_b, *orari[turno_b])
+            if fine_a <= inizio_b:
+                riposo_insufficiente = (inizio_b - fine_a).total_seconds() < riposo * 60
+            elif fine_b <= inizio_a:
+                riposo_insufficiente = (inizio_a - fine_b).total_seconds() < riposo * 60
+            else:
+                riposo_insufficiente = True
+            if riposo_insufficiente:
+                errori.append(
+                    f"I turni predeterminati di {nome_a} del {giorno_a:%d/%m/%Y} "
+                    f"e {giorno_b:%d/%m/%Y} non rispettano il riposo minimo."
+                )
+    if errori:
+        return [], errori
 
-    def estrai(solver) -> list[dict]:
-        risultato = []
-        for (nome, giorno, turno), variabile in assegnazioni.items():
-            if solver.Value(variabile):
-                risultato.append({"Data": giorno.isoformat(), "Turno": turno, "Nome": nome})
-        risultato.sort(key=lambda riga: (riga["Data"], turni.index(riga["Turno"]), riga["Nome"]))
-        return risultato
-
-    def assegnazioni_attive(solver):
-        # i turni predeterminati sono uguali in tutte le proposte: non contano
-        return [
-            variabile
-            for chiave, variabile in assegnazioni.items()
-            if solver.Value(variabile) and chiave not in predet_set
-        ]
-
-    solver, stato = risolvi(42)
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = 30
+    solver.parameters.num_search_workers = 1
+    solver.parameters.random_seed = 42
+    stato = solver.Solve(model)
     if stato not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         if stato == cp_model.INFEASIBLE:
             return [], [
                 "Non esiste un calendario che rispetti contemporaneamente coperture, "
-                "quote mensili, assenze, turni predeterminati, riposo minimo, smonto dopo la "
-                f"notte, un giorno di riposo ogni {max_consecutivi} turni e il tetto del monte "
-                "ore mensile. Controlla i vincoli del mese: per esempio quote massime troppo "
-                "basse, troppe assenze o turni predeterminati ravvicinati."
+                "quote mensili, assenze, turni predeterminati e riposo minimo. "
+                "Controlla i vincoli del mese."
             ]
         return [], ["Il calcolo del calendario non è riuscito entro il tempo disponibile."]
 
-    soluzioni = [estrai(solver)]
-
-    if numero_alternative > 1:
-        # Le alternative non possono peggiorare la copertura, né aggiungere notti
-        # "notte, smonto, notte", e devono restare vicine alla qualità della migliore.
-        copertura_migliore = sum(solver.Value(v) for v in termini_copertura_pomeriggio)
-        smonto_migliore = sum(solver.Value(e) * peso for e, peso, _ in termini_smonto)
-        altri_migliori = sum(solver.Value(e) * peso for e, peso, _ in termini)
-        if termini_copertura_pomeriggio:
-            model.Add(sum(termini_copertura_pomeriggio) <= copertura_migliore)
-        if termini_smonto:
-            model.Add(
-                sum(e * peso for e, peso, _ in termini_smonto)
-                <= smonto_migliore + 2 * PENALITA_DOPO_SMONTO["Mattina"]
+    risultato = []
+    for (nome, giorno, turno), variabile in assegnazioni.items():
+        if solver.Value(variabile):
+            risultato.append(
+                {
+                    "Data": giorno.isoformat(),
+                    "Turno": turno,
+                    "Nome": nome,
+                }
             )
-        if termini:
-            model.Add(
-                sum(e * peso for e, peso, _ in termini)
-                <= altri_migliori + max(400, altri_migliori // 30)
-            )
-        precedenti = assegnazioni_attive(solver)
-        for numero in range(1, numero_alternative):
-            diverse = max(10, int(len(precedenti) * 0.15))
-            if len(precedenti) < diverse:
-                break
-            model.Add(sum(precedenti) <= len(precedenti) - diverse)
-            solver, stato = risolvi(42 + numero)
-            if stato not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-                break  # non esistono altre soluzioni abbastanza diverse
-            soluzioni.append(estrai(solver))
-            precedenti = assegnazioni_attive(solver)
-    return soluzioni, []
-
-
-def genera_calendario(
-    personale: list[dict],
-    regole: dict,
-    anno: int,
-    mese: int,
-    pianificazione: dict,
-    storico_minuti: dict[str, int] | None = None,
-    giorni_storico: int = 0,
-    calendario_precedente: list[dict] | None = None,
-) -> tuple[list[dict], list[str]]:
-    """Genera il calendario migliore (una sola proposta)."""
-    soluzioni, errori = _genera(
-        personale, regole, anno, mese, pianificazione, storico_minuti,
-        giorni_storico, calendario_precedente, numero_alternative=1,
-    )
-    return (soluzioni[0] if soluzioni else []), errori
-
-
-def genera_alternative(
-    personale: list[dict],
-    regole: dict,
-    anno: int,
-    mese: int,
-    pianificazione: dict,
-    storico_minuti: dict[str, int] | None = None,
-    giorni_storico: int = 0,
-    calendario_precedente: list[dict] | None = None,
-    numero: int = 3,
-    secondi_per_alternativa: int = 30,
-) -> tuple[list[list[dict]], list[str]]:
-    """Genera fino a `numero` calendari validi e sensibilmente diversi tra loro."""
-    return _genera(
-        personale, regole, anno, mese, pianificazione, storico_minuti,
-        giorni_storico, calendario_precedente,
-        numero_alternative=max(1, numero),
-        secondi_per_alternativa=secondi_per_alternativa,
-    )
-
-
-def riepilogo_calendario(
-    personale: list[dict],
-    regole: dict,
-    anno: int,
-    mese: int,
-    pianificazione: dict,
-    assegnazioni: list[dict],
-    calendario_precedente: list[dict] | None = None,
-) -> tuple[dict, list[dict]]:
-    """Indicatori per confrontare le proposte e tabella per persona."""
-    persone = {
-        str(persona.get("Nome", "")).strip(): persona
-        for persona in personale
-        if str(persona.get("Nome", "")).strip()
-    }
-    try:
-        durate = {turno: durata_turno_minuti(regole, turno) for turno in TURNI}
-        tolleranza = tolleranza_minuti(regole)
-        extra = {}
-        for riga in pianificazione.get("festivi_extra", []):
-            if riga.get("Data"):
-                extra[_data(riga["Data"])] = str(riga.get("Descrizione") or "")
-    except (KeyError, StopIteration, TypeError, ValueError):
-        return {}, []
-    giorni = [
-        date(anno, mese, numero) for numero in range(1, calendar.monthrange(anno, mese)[1] + 1)
-    ]
-    una_giornata = timedelta(days=1)
-    lavoro: dict[tuple[str, date], str] = {}
-    pomeriggi_per_giorno: dict[date, int] = {}
-    for riga in assegnazioni:
-        nome = str(riga.get("Nome", "")).strip()
-        giorno = _data(riga["Data"])
-        lavoro[(nome, giorno)] = riga["Turno"]
-        if riga["Turno"] == "Pomeriggio":
-            pomeriggi_per_giorno[giorno] = pomeriggi_per_giorno.get(giorno, 0) + 1
-    prec = _turni_precedenti(calendario_precedente, giorni[0], persone)
-    tutti = {**prec, **lavoro}
-
-    copertura_pomeriggio = next(
-        (r for r in regole.get("copertura", []) if r.get("Turno") == "Pomeriggio"), {}
-    )
-    pomeriggi_ridotti = 0
-    for giorno in giorni:
-        fascia = "Festivo" if _turno_festivo(giorno, "Pomeriggio", extra) else "Feriale"
-        try:
-            richiesta = int(copertura_pomeriggio.get(fascia, 0) or 0)
-        except (TypeError, ValueError):
-            richiesta = 0
-        if pomeriggi_per_giorno.get(giorno, 0) < richiesta:
-            pomeriggi_ridotti += 1
-
-    notte_smonto_notte = sum(
-        1
-        for (nome, giorno), turno in lavoro.items()
-        if turno == "Notte" and tutti.get((nome, giorno - 2 * una_giornata)) == "Notte"
-    )
-
-    crediti, _ = crediti_assenza_minuti(pianificazione, regole, anno, mese)
-    righe = []
-    fuori_limite = 0
-    scostamento_massimo = 0.0
-    for nome, persona in persone.items():
-        propri = [(giorno, turno) for (n, giorno), turno in lavoro.items() if n == nome]
-        lavorati = sum(durate[turno] for _, turno in propri)
-        credito = crediti.get(nome, 0)
-        riga = {
-            "Nome": nome,
-            "Mattine": sum(1 for _, t in propri if t == "Mattina"),
-            "Pomeriggi": sum(1 for _, t in propri if t == "Pomeriggio"),
-            "Notti": sum(1 for _, t in propri if t == "Notte"),
-            "Festivi": sum(1 for giorno, t in propri if _turno_festivo(giorno, t, extra)),
-            "Ore lavorate": formatta_minuti(lavorati),
-            "Ore assenza": formatta_minuti(credito),
-            "Scostamento (turni)": None,
-        }
-        if persona.get("Categoria", "Di ruolo") == "Di ruolo":
-            try:
-                ore_settimanali = float(persona.get("Ore settimanali", 38) or 38)
-            except (TypeError, ValueError):
-                ore_settimanali = 38.0
-            scostamento = lavorati + credito - monte_ore_minuti(ore_settimanali, len(giorni))
-            riga["Scostamento (turni)"] = round(scostamento / durate["Mattina"], 1)
-            scostamento_massimo = max(scostamento_massimo, abs(scostamento) / durate["Mattina"])
-            if abs(scostamento) > tolleranza:
-                fuori_limite += 1
-        righe.append(riga)
-    indicatori = {
-        "pomeriggi_ridotti": pomeriggi_ridotti,
-        "notte_smonto_notte": notte_smonto_notte,
-        "persone_fuori_limite": fuori_limite,
-        "scostamento_massimo_turni": round(scostamento_massimo, 1),
-    }
-    return indicatori, righe
-
-
-def controlla_calendario(
-    personale: list[dict],
-    regole: dict,
-    anno: int,
-    mese: int,
-    pianificazione: dict,
-    assegnazioni: list[dict],
-    calendario_precedente: list[dict] | None = None,
-) -> tuple[list[str], list[str]]:
-    """Verifica un calendario. Restituisce (violazioni, avvisi).
-
-    Le violazioni sono regole obbligatorie non rispettate; gli avvisi sono
-    informazioni utili (pomeriggi ridotti, monte ore fuori tolleranza, ecc.).
-    """
-    violazioni: list[str] = []
-    avvisi: list[str] = []
-    persone = {
-        str(persona.get("Nome", "")).strip(): persona
-        for persona in personale
-        if str(persona.get("Nome", "")).strip()
-    }
-    try:
-        orari = {
-            riga["Turno"]: (riga["Inizio"], riga["Fine"]) for riga in regole.get("turni", [])
-        }
-        riposo = int(regole.get("riposo_minimo_ore", 11)) * 60
-        max_consecutivi = int(regole.get("max_turni_consecutivi", MAX_TURNI_CONSECUTIVI))
-        durate = {turno: durata_turno_minuti(regole, turno) for turno in TURNI}
-        tolleranza = tolleranza_minuti(regole)
-        extra = {}
-        for riga in pianificazione.get("festivi_extra", []):
-            if riga.get("Data"):
-                extra[_data(riga["Data"])] = str(riga.get("Descrizione") or "")
-    except (KeyError, StopIteration, TypeError, ValueError):
-        return ["Regole non valide: impossibile controllare il calendario."], []
-
-    giorni = [
-        date(anno, mese, numero) for numero in range(1, calendar.monthrange(anno, mese)[1] + 1)
-    ]
-    una_giornata = timedelta(days=1)
-    lavoro: dict[tuple[str, date], str] = {}
-    conteggio_slot: dict[tuple[date, str], int] = {}
-    for riga in assegnazioni:
-        nome = str(riga.get("Nome", "")).strip()
-        giorno = _data(riga["Data"])
-        turno = riga["Turno"]
-        if giorno.year != anno or giorno.month != mese:
-            continue
-        if (nome, giorno) in lavoro:
-            violazioni.append(f"{nome} ha più di un turno il {giorno:%d/%m/%Y}.")
-        lavoro[(nome, giorno)] = turno
-        conteggio_slot[(giorno, turno)] = conteggio_slot.get((giorno, turno), 0) + 1
-    prec = _turni_precedenti(calendario_precedente, giorni[0], persone)
-    tutti = {**prec, **lavoro}
-
-    # Riposo minimo e smonto
-    for nome in persone:
-        propri = sorted((giorno, turno) for (n, giorno), turno in tutti.items() if n == nome)
-        for indice, (giorno_a, turno_a) in enumerate(propri):
-            for giorno_b, turno_b in propri[indice + 1 :]:
-                if (giorno_b - giorno_a).days > 3:
-                    break
-                if giorno_b < giorni[0]:
-                    continue
-                if turno_a == "Notte" and giorno_b == giorno_a + una_giornata:
-                    violazioni.append(
-                        f"{nome}: turno il {giorno_b:%d/%m/%Y} dopo la notte del "
-                        f"{giorno_a:%d/%m/%Y} (manca lo smonto)."
-                    )
-                elif _riposo_insufficiente(giorno_a, turno_a, giorno_b, turno_b, orari, riposo):
-                    violazioni.append(
-                        f"{nome}: riposo insufficiente tra il {giorno_a:%d/%m/%Y} "
-                        f"e il {giorno_b:%d/%m/%Y}."
-                    )
-
-    # Un giorno di riposo ogni `max_consecutivi` turni (lo smonto non conta come riposo)
-    def e_riposo(nome: str, giorno: date) -> bool:
-        return (nome, giorno) not in tutti and tutti.get((nome, giorno - una_giornata)) != "Notte"
-
-    lunghezza = max_consecutivi + 1
-    for nome in persone:
-        segnalata = False
-        for inizio in range(-(lunghezza - 1), len(giorni) - lunghezza + 1):
-            if inizio + lunghezza - 1 < 0:
-                continue
-            primo = giorni[0] + timedelta(days=inizio)
-            finestra = [primo + timedelta(days=k) for k in range(lunghezza)]
-            if any(e_riposo(nome, giorno) for giorno in finestra):
-                segnalata = False
-                continue
-            if not segnalata:
-                violazioni.append(
-                    f"{nome}: nessun giorno di riposo tra il {finestra[0]:%d/%m/%Y} e il "
-                    f"{finestra[-1]:%d/%m/%Y} (più di {max_consecutivi} turni di lavoro di seguito)."
-                )
-            segnalata = True
-
-    # Coperture
-    pomeriggi_ridotti = []
-    for giorno in giorni:
-        for turno in TURNI:
-            fascia = "Festivo" if _turno_festivo(giorno, turno, extra) else "Feriale"
-            try:
-                richiesta = int(
-                    next(
-                        (r for r in regole.get("copertura", []) if r.get("Turno") == turno), {}
-                    ).get(fascia, 0)
-                    or 0
-                )
-            except (TypeError, ValueError):
-                continue
-            assegnati = conteggio_slot.get((giorno, turno), 0)
-            if assegnati < richiesta:
-                if turno == "Pomeriggio":
-                    pomeriggi_ridotti.append(f"{giorno:%d/%m} ({assegnati} su {richiesta})")
-                else:
-                    violazioni.append(
-                        f"Copertura incompleta il {giorno:%d/%m/%Y} ({turno}): "
-                        f"{assegnati} persone su {richiesta}."
-                    )
-    if pomeriggi_ridotti:
-        avvisi.append(
-            "Personale insufficiente: pomeriggio ridotto nei giorni "
-            + ", ".join(pomeriggi_ridotti)
-            + "."
-        )
-
-    # Notte, smonto, notte: ammesso solo se non se ne può fare a meno
-    for (nome, giorno), turno in sorted(lavoro.items(), key=lambda voce: (voce[0][1], voce[0][0])):
-        if turno == "Notte" and tutti.get((nome, giorno - 2 * una_giornata)) == "Notte":
-            avvisi.append(
-                f"{nome} fa una notte il {giorno:%d/%m/%Y} due giorni dopo un'altra notte "
-                "(notte, smonto, notte)."
-            )
-
-    # Monte ore mensile
-    crediti, errori_crediti = crediti_assenza_minuti(pianificazione, regole, anno, mese)
-    if not errori_crediti:
-        sotto, sopra = [], []
-        for nome, persona in persone.items():
-            if persona.get("Categoria", "Di ruolo") != "Di ruolo":
-                continue
-            try:
-                ore_settimanali = float(persona.get("Ore settimanali", 38) or 38)
-            except (TypeError, ValueError):
-                continue
-            lavorati = sum(durate[turno] for (n, _), turno in lavoro.items() if n == nome)
-            totale = lavorati + crediti.get(nome, 0)
-            obiettivo = monte_ore_minuti(ore_settimanali, len(giorni))
-            scostamento = totale - obiettivo
-            if scostamento > tolleranza and totale > crediti.get(nome, 0):
-                sopra.append(f"{nome} ({formatta_minuti(scostamento)})")
-            elif scostamento < -tolleranza:
-                sotto.append(f"{nome} ({formatta_minuti(scostamento)})")
-        if sopra:
-            violazioni.append(
-                "Monte ore mensile superato di oltre "
-                f"{int(regole.get('scostamento_max_turni', SCOSTAMENTO_MAX_TURNI))} turni: "
-                + ", ".join(sopra)
-                + "."
-            )
-        if sotto:
-            avvisi.append(
-                "Sotto il monte ore mensile di oltre "
-                f"{int(regole.get('scostamento_max_turni', SCOSTAMENTO_MAX_TURNI))} turni: "
-                + ", ".join(sotto)
-                + ". I turni richiesti non bastano per far raggiungere a tutti il monte ore."
-            )
-    return violazioni, avvisi
+    risultato.sort(key=lambda riga: (riga["Data"], turni.index(riga["Turno"]), riga["Nome"]))
+    return risultato, []
