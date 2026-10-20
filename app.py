@@ -24,7 +24,10 @@ from excel_report import crea_report_excel
 CARTELLA_DATI = Path(__file__).parent / "dati"
 CARTELLA_DATI.mkdir(exist_ok=True)
 
-COLONNE = ["Nome", "Categoria", "Mattina", "Pomeriggio", "Notte", "Ore settimanali"]
+COLONNE = [
+    "Nome", "Categoria", "Almeno 1 festivo", "Mattina", "Pomeriggio", "Notte",
+    "Ore settimanali",
+]
 COLONNE_TURNI = ["Mattina", "Pomeriggio", "Notte"]
 CATEGORIE = ["Di ruolo", "Solo festivi"]
 FORMATO_ORA = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -153,6 +156,7 @@ def normalizza(df: pd.DataFrame) -> pd.DataFrame:
     df = df.reindex(columns=COLONNE).copy()
     df["Nome"] = df["Nome"].fillna("").astype(str)
     df["Categoria"] = df["Categoria"].where(df["Categoria"].isin(CATEGORIE), "Di ruolo")
+    df["Almeno 1 festivo"] = df["Almeno 1 festivo"].fillna(True).astype(bool)
     for colonna in COLONNE_TURNI:
         df[colonna] = df[colonna].fillna(False).astype(bool)
     df["Ore settimanali"] = pd.to_numeric(df["Ore settimanali"], errors="coerce").fillna(38.0)
@@ -849,6 +853,8 @@ with tab_personale:
     st.subheader(f"Personale: {scelta}")
     st.caption(
         "Aggiungi una riga per ogni persona e spunta i turni che può fare. "
+        "Per impostazione predefinita, il calendario cerca di assegnare almeno un turno festivo a tutti; "
+        "deseleziona Almeno 1 festivo per indicare un'eccezione. "
         "Puoi modificare qualsiasi cella in qualsiasi momento e premere Salva. "
         "Per eliminare una riga, selezionala e premi Canc. "
         "Il calendario assegna al massimo un turno al giorno per persona. "
@@ -867,6 +873,9 @@ with tab_personale:
             "Nome": st.column_config.TextColumn("Nome", required=True),
             "Categoria": st.column_config.SelectboxColumn(
                 "Categoria", options=CATEGORIE, default="Di ruolo", required=True
+            ),
+            "Almeno 1 festivo": st.column_config.CheckboxColumn(
+                "Almeno 1 festivo", default=True
             ),
             "Mattina": st.column_config.CheckboxColumn("Mattina (M)", default=True),
             "Pomeriggio": st.column_config.CheckboxColumn("Pomeriggio (P)", default=True),

@@ -4,7 +4,7 @@ from io import BytesIO
 
 from openpyxl import Workbook
 from openpyxl.formatting.rule import CellIsRule
-from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.datavalidation import DataValidation
 
@@ -155,7 +155,7 @@ def crea_report_excel(
             cella.font = Font(bold=True, color="FFFFFF")
             cella.fill = PatternFill("solid", fgColor=colore)
             cella.alignment = Alignment(horizontal="center", vertical="center")
-        calendario.column_dimensions[colonna].width = 5
+        calendario.column_dimensions[colonna].width = 3
 
     calendario.freeze_panes = "B3"
     calendario.sheet_view.showGridLines = False
@@ -388,6 +388,20 @@ def crea_report_excel(
             lettera = get_column_letter(colonna[0].column)
             larghezza = max(len(str(cella.value or "")) for cella in colonna)
             sheet.column_dimensions[lettera].width = min(max(larghezza + 2, 12), 30)
+
+    for numero_riga in range(1, calendario.max_row + 1):
+        calendario.row_dimensions[numero_riga].height = 20
+
+    bordo = Border(
+        left=Side(style="thin"),
+        right=Side(style="thin"),
+        top=Side(style="thin"),
+        bottom=Side(style="thin"),
+    )
+    for sheet in workbook.worksheets:
+        for riga in sheet.iter_rows():
+            for cella in riga:
+                cella.border = bordo
 
     output = BytesIO()
     workbook.save(output)

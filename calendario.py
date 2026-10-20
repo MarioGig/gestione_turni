@@ -273,7 +273,9 @@ def _genera(
     - se il personale non basta si riduce per primo il pomeriggio, solo se serve;
     - se non basta, la copertura mattutina feriale può scendere fino a 4;
     - la copertura minima della notte non si riduce mai;
-    - dopo lo smonto si preferisce il pomeriggio;
+    - si cerca di assegnare almeno un turno festivo a ogni persona;
+    - quando possibile si lascia libero anche il giorno dopo lo smonto;
+    - se non è possibile il riposo dopo lo smonto si preferisce il pomeriggio;
     - il monte ore mensile viene avvicinato il più possibile (anche verso il basso);
     - equità tra le persone.
     """
@@ -587,6 +589,21 @@ def _genera(
     if errori:
         return [], errori
 
+    # Preferenza morbida: almeno un turno festivo per chi ne ha di assegnabili.
+    termini_festivi_mancanti = []
+    for numero_persona, nome in enumerate(persone):
+        if not bool(persone[nome].get("Almeno 1 festivo", True)):
+            continue
+        turni_festivi = [
+            variabile
+            for (persona, giorno, turno), variabile in assegnazioni.items()
+            if persona == nome and _turno_festivo(giorno, turno, extra)
+        ]
+        if turni_festivi:
+            mancante = model.NewBoolVar(f"festivo_mancante_{numero_persona}")
+            model.Add(sum(turni_festivi) + mancante >= 1)
+            termini_festivi_mancanti.append(mancante)
+
     # Un solo turno al giorno e quote mensili per persona
     for nome in persone:
         for giorno in giorni:
@@ -778,7 +795,8 @@ def _genera(
             f"ne consente al massimo {formatta_minuti(capacita_ruolo)}."
         ]
 
-    # Dopo lo smonto si preferisce il pomeriggio
+    # Si preferisce lasciare libero anche il giorno successivo allo smonto.
+    termini_riposo_dopo_smonto = []
     termini_smonto: list[tuple[object, int, int]] = []
     for nome in persone:
         for indice, giorno in enumerate(giorni):
@@ -791,6 +809,20 @@ def _genera(
                 notte_origine = None  # notte del mese precedente: è già un fatto
             else:
                 continue
+            turni_dopo_smonto = [
+                assegnazioni[(nome, giorno, turno)]
+                for turno in turni
+                if (nome, giorno, turno) in assegnazioni
+            ]
+            for variabile in turni_dopo_smonto:
+                if notte_origine is None:
+                    termini_riposo_dopo_smonto.append(variabile)
+                else:
+                    lavora_dopo_smonto = model.NewBoolVar(
+                        f"lavora_dopo_smonto_{len(termini_riposo_dopo_smonto)}"
+                    )
+                    model.Add(lavora_dopo_smonto >= notte_origine + variabile - 1)
+                    termini_riposo_dopo_smonto.append(lavora_dopo_smonto)
             for turno in turni:
                 penalita = PENALITA_DOPO_SMONTO[turno]
                 variabile = assegnazioni.get((nome, giorno, turno))
@@ -803,21 +835,43 @@ def _genera(
                     model.Add(sgradito >= notte_origine + variabile - 1)
                     termini_smonto.append((sgradito, penalita, 1))
 
-    # Prima si riduce il pomeriggio, poi la mattina; entrambe le riduzioni
-    # prevalgono sulle preferenze individuali e sul bilanciamento delle ore.
+    # Ordine lessicografico: coperture, festivi, riposo dopo smonto, altre preferenze.
     tutti_i_termini = termini + termini_smonto
-    massimo_resto = sum(peso * massimo for _, peso, massimo in tutti_i_termini)
-    peso_copertura_mattina = massimo_resto + 1
+    massimo_preferenze = sum(peso * massimo for _, peso, massimo in tutti_i_termini)
+    peso_riposo_dopo_smonto = massimo_preferenze + 1
+    massimo_riposi_dopo_smonto = len(termini_riposo_dopo_smonto)
+    peso_festivo = (
+        massimo_preferenze
+        + massimo_riposi_dopo_smonto * peso_riposo_dopo_smonto
+        + 1
+    )
+    massimo_festivi_mancanti = len(termini_festivi_mancanti)
+    massimo_preferenze_totale = (
+        massimo_preferenze
+        + massimo_riposi_dopo_smonto * peso_riposo_dopo_smonto
+        + massimo_festivi_mancanti * peso_festivo
+    )
+    peso_copertura_mattina = massimo_preferenze_totale + 1
     massimo_riduzione_mattina = sum(
         richieste[(giorno, "Mattina")] - minimi_richiesti[(giorno, "Mattina")]
         for giorno in giorni
     )
     peso_copertura_pomeriggio = (
-        massimo_resto + massimo_riduzione_mattina * peso_copertura_mattina + 1
+        massimo_preferenze_totale
+        + massimo_riduzione_mattina * peso_copertura_mattina
+        + 1
     )
-    if tutti_i_termini or termini_copertura_pomeriggio or termini_copertura_mattina:
+    if (
+        tutti_i_termini
+        or termini_riposo_dopo_smonto
+        or termini_festivi_mancanti
+        or termini_copertura_pomeriggio
+        or termini_copertura_mattina
+    ):
         model.Minimize(
             sum(espressione * peso for espressione, peso, _ in tutti_i_termini)
+            + sum(termini_riposo_dopo_smonto) * peso_riposo_dopo_smonto
+            + sum(termini_festivi_mancanti) * peso_festivo
             + sum(termini_copertura_mattina) * peso_copertura_mattina
             + sum(termini_copertura_pomeriggio) * peso_copertura_pomeriggio
         )
@@ -866,10 +920,22 @@ def _genera(
         # Le alternative non possono peggiorare la copertura, né aggiungere notti
         # "notte, smonto, notte", e devono restare vicine alla qualità della migliore.
         copertura_migliore = sum(solver.Value(v) for v in termini_copertura_pomeriggio)
+        festivi_mancanti_migliori = sum(
+            solver.Value(v) for v in termini_festivi_mancanti
+        )
+        riposi_dopo_smonto_migliori = sum(
+            solver.Value(v) for v in termini_riposo_dopo_smonto
+        )
         smonto_migliore = sum(solver.Value(e) * peso for e, peso, _ in termini_smonto)
         altri_migliori = sum(solver.Value(e) * peso for e, peso, _ in termini)
         if termini_copertura_pomeriggio:
             model.Add(sum(termini_copertura_pomeriggio) <= copertura_migliore)
+        if termini_festivi_mancanti:
+            model.Add(sum(termini_festivi_mancanti) <= festivi_mancanti_migliori)
+        if termini_riposo_dopo_smonto:
+            model.Add(
+                sum(termini_riposo_dopo_smonto) <= riposi_dopo_smonto_migliori
+            )
         if termini_smonto:
             model.Add(
                 sum(e * peso for e, peso, _ in termini_smonto)
@@ -1098,6 +1164,22 @@ def controlla_calendario(
         conteggio_slot[(giorno, turno)] = conteggio_slot.get((giorno, turno), 0) + 1
     prec = _turni_precedenti(calendario_precedente, giorni[0], persone)
     tutti = {**prec, **lavoro}
+
+    senza_festivo = [
+        nome
+        for nome, persona in persone.items()
+        if bool(persona.get("Almeno 1 festivo", True))
+        and not any(
+            nome_lavoro == nome and _turno_festivo(giorno, turno, extra)
+            for (nome_lavoro, giorno), turno in lavoro.items()
+        )
+    ]
+    if senza_festivo:
+        avvisi.append(
+            "Non è stato possibile assegnare un turno festivo a: "
+            + ", ".join(senza_festivo)
+            + "."
+        )
 
     # Riposo minimo e smonto
     for nome in persone:
