@@ -144,10 +144,12 @@ def crea_report_excel(
             cella.font = Font(bold=True, color="FFFFFF")
             cella.fill = PatternFill("solid", fgColor=colore)
             cella.alignment = Alignment(horizontal="center", vertical="center")
-        calendario.column_dimensions[colonna].width = 3
+        calendario.column_dimensions[colonna].width = 5
 
     calendario.freeze_panes = "B3"
     calendario.sheet_view.showGridLines = False
+    calendario.row_dimensions[1].height = 34
+    calendario.row_dimensions[2].height = 24
     validazione = DataValidation(
         type="list", formula1='"M,P,N,R,F,CS"', allow_blank=False
     )
@@ -282,11 +284,8 @@ def crea_report_excel(
             f"={col_lavorate}{riga_excel}+{col_assenze}{riga_excel}+{col_precedenti}{riga_excel}"
         )
         if persona.get("Categoria", "Di ruolo") == "Di ruolo":
-            ore_settimanali = persona.get("Ore settimanali")
-            if ore_settimanali is None:
-                ore_settimanali = 38
             obiettivo_ore = (
-                float(ore_settimanali)
+                float(persona.get("Ore settimanali", 38) or 38)
                 * 52
                 * giorno_progressivo(anno, mese)
                 / (366 if calendar.isleap(anno) else 365)
@@ -339,9 +338,6 @@ def crea_report_excel(
             lettera = get_column_letter(colonna[0].column)
             larghezza = max(len(str(cella.value or "")) for cella in colonna)
             sheet.column_dimensions[lettera].width = min(max(larghezza + 2, 12), 30)
-
-    for numero_riga in range(1, calendario.max_row + 1):
-        calendario.row_dimensions[numero_riga].height = 20
 
     output = BytesIO()
     workbook.save(output)
@@ -396,11 +392,8 @@ def _crea_riepilogo_annuale(
             value=f"={riferimento_mese}+{storico_ore}",
         )
         if persona.get("Categoria", "Di ruolo") == "Di ruolo":
-            ore_settimanali = persona.get("Ore settimanali")
-            if ore_settimanali is None:
-                ore_settimanali = 38
             obiettivo = (
-                float(ore_settimanali)
+                float(persona.get("Ore settimanali", 38) or 38)
                 * 52
                 * progressivo
                 / giorni_anno

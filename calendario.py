@@ -177,8 +177,6 @@ def genera_calendario(
     mese: int,
     pianificazione: dict,
     storico_minuti: dict[str, int] | None = None,
-    assegnazioni_precedenti: list[dict] | None = None,
-    calendari_esclusi: list[list[dict]] | None = None,
 ) -> tuple[list[dict], list[str]]:
     """Genera il calendario mensile rispettando coperture e vincoli individuali."""
     turni = ("Mattina", "Pomeriggio", "Notte")
@@ -247,26 +245,10 @@ def genera_calendario(
         date(anno, mese, giorno)
         for giorno in range(1, calendar.monthrange(anno, mese)[1] + 1)
     ]
-    giorno_inizio_mese = giorni[0]
-    turno_precedente: set[tuple[str, date, str]] = set()
-    for riga in assegnazioni_precedenti or []:
-        nome = str(riga.get("Nome", "")).strip()
-        try:
-            giorno = _data(riga["Data"])
-        except (KeyError, TypeError, ValueError):
-            return [], ["Il calendario precedente contiene una data non valida."]
-        turno = riga.get("Turno")
-        if nome not in persone:
-            return [], [f"Il calendario precedente indica una persona non presente: {nome}."]
-        if turno not in turni:
-            return [], [f"Il calendario precedente contiene un turno non valido per {nome}."]
-        if giorno < giorno_inizio_mese and giorno >= giorno_inizio_mese - timedelta(days=6):
-            turno_precedente.add((nome, giorno, turno))
-
     richieste: dict[tuple[date, str], int] = {}
     minimi_richiesti: dict[tuple[date, str], int] = {}
     termini_copertura_pomeriggio = []
-    termini_copertura_mattina = []
+    massimo_scarto_copertura = 0
     for giorno in giorni:
         for turno in turni:
             fascia = "Festivo" if _turno_festivo(giorno, turno, extra) else "Feriale"
@@ -277,18 +259,18 @@ def genera_calendario(
             if richiesta < 0:
                 return [], [f"La copertura del turno {turno} non può essere negativa."]
             richieste[(giorno, turno)] = richiesta
-            minimo = 0 if turno == "Pomeriggio" else richiesta
-            if (
-                turno == "Mattina"
-                and fascia == "Feriale"
-                and richiesta > 4
-                and any(
-                    inizio.date() <= giorno < fine.date()
-                    for intervalli in assenze.values()
-                    for inizio, fine in intervalli
-                )
-            ):
-                minimo = 4
+            minimo = richiesta
+            if turno == "Pomeriggio" and fascia == "Feriale":
+                try:
+                    minimo = int(regole.get("pomeriggio_feriale_minimo", richiesta))
+                except (TypeError, ValueError):
+                    return [], ["Il minimo del pomeriggio feriale non è valido."]
+                if minimo < 0 or minimo > richiesta:
+                    return [], [
+                        "Il minimo del pomeriggio feriale deve essere compreso "
+                        "tra zero e la copertura feriale configurata."
+                    ]
+                massimo_scarto_copertura += richiesta - minimo
             minimi_richiesti[(giorno, turno)] = minimo
 
     quote = {
@@ -373,43 +355,6 @@ def genera_calendario(
                 f"{nome} ha più di un turno predeterminato il {giorno:%d/%m/%Y}; "
                 "è consentito un solo turno al giorno."
             )
-    for nome, giorno, turno in predeterminati:
-        if turno == "Notte" and (nome, giorno + timedelta(days=1)) in predet_per_persona_giorno:
-            errori.append(
-                f"{nome} deve avere lo smonto il {giorno + timedelta(days=1):%d/%m/%Y} "
-                "dopo la notte predeterminata."
-            )
-    for nome in persone:
-        for giorno_finale in giorni:
-            giorni_lavorati = {
-                giorno_storico
-                for nome_storico, giorno_storico, _ in turno_precedente
-                if nome_storico == nome
-                and giorno_finale - timedelta(days=6) <= giorno_storico < giorno_inizio_mese
-            }
-            giorni_lavorati.update(
-                giorno_predeterminato
-                for nome_predeterminato, giorno_predeterminato in predet_per_persona_giorno
-                if nome_predeterminato == nome
-                and giorno_finale - timedelta(days=6)
-                <= giorno_predeterminato
-                <= giorno_finale
-            )
-            if len(giorni_lavorati) > 6:
-                errori.append(
-                    f"{nome} supera sei giorni lavorati nella finestra di sette giorni "
-                    f"che termina il {giorno_finale:%d/%m/%Y}."
-                )
-        if any(
-            nome_storico == nome
-            and giorno_storico == giorno_inizio_mese - timedelta(days=1)
-            and turno_storico == "Notte"
-            for nome_storico, giorno_storico, turno_storico in turno_precedente
-        ) and (nome, giorno_inizio_mese) in predet_per_persona_giorno:
-            errori.append(
-                f"{nome} deve avere lo smonto il {giorno_inizio_mese:%d/%m/%Y} "
-                "dopo la notte del mese precedente."
-            )
     if errori:
         return [], errori
 
@@ -452,18 +397,10 @@ def genera_calendario(
             assegnati = sum(assegnazioni[(nome, giorno, turno)] for nome in candidati)
             model.Add(assegnati >= minimi_richiesti[slot])
             model.Add(assegnati <= richieste[slot])
-            if turno == "Mattina" and richieste[slot] > minimi_richiesti[slot]:
+            if richieste[slot] > minimi_richiesti[slot]:
                 scopertura = model.NewIntVar(
                     0,
-                    richieste[slot],
-                    f"scopertura_mattina_{len(termini_copertura_mattina)}",
-                )
-                model.Add(scopertura == richieste[slot] - assegnati)
-                termini_copertura_mattina.append(scopertura)
-            if turno == "Pomeriggio" and richieste[slot] > minimi_richiesti[slot]:
-                scopertura = model.NewIntVar(
-                    0,
-                    richieste[slot],
+                    richieste[slot] - minimi_richiesti[slot],
                     f"scopertura_pomeriggio_{len(termini_copertura_pomeriggio)}",
                 )
                 model.Add(scopertura == richieste[slot] - assegnati)
@@ -480,54 +417,6 @@ def genera_calendario(
             ]
             if turni_giorno:
                 model.Add(sum(turni_giorno) <= 1)
-            notte = assegnazioni.get((nome, giorno, "Notte"))
-            giorno_successivo = giorno + timedelta(days=1)
-            if notte is not None and giorno_successivo in giorni:
-                turni_successivi = [
-                    assegnazioni[(nome, giorno_successivo, turno)]
-                    for turno in turni
-                    if (nome, giorno_successivo, turno) in assegnazioni
-                ]
-                if turni_successivi:
-                    model.Add(notte + sum(turni_successivi) <= 1)
-
-        for giorno_finale in giorni:
-            finestra = [
-                giorno_finale - timedelta(days=offset)
-                for offset in range(6, -1, -1)
-            ]
-            turni_finestra = []
-            turni_storici = 0
-            for giorno_finestra in finestra:
-                if giorno_finestra < giorno_inizio_mese:
-                    turni_storici += any(
-                        nome_storico == nome and data_storica == giorno_finestra
-                        for nome_storico, data_storica, _ in turno_precedente
-                    )
-                    continue
-                turni_finestra.extend(
-                    assegnazioni[(nome, giorno_finestra, turno)]
-                    for turno in turni
-                    if (nome, giorno_finestra, turno) in assegnazioni
-                )
-            if turni_finestra:
-                model.Add(sum(turni_finestra) + turni_storici <= 6)
-
-        notte_precedente = any(
-            nome_storico == nome
-            and data_storica == giorno_inizio_mese - timedelta(days=1)
-            and turno_storico == "Notte"
-            for nome_storico, data_storica, turno_storico in turno_precedente
-        )
-        if notte_precedente:
-            turni_primo_giorno = [
-                assegnazioni[(nome, giorno_inizio_mese, turno)]
-                for turno in turni
-                if (nome, giorno_inizio_mese, turno) in assegnazioni
-            ]
-            if turni_primo_giorno:
-                model.Add(sum(turni_primo_giorno) == 0)
-
         for turno in turni:
             variabili = [
                 variabile
@@ -605,21 +494,11 @@ def genera_calendario(
         if persona.get("Categoria", "Di ruolo") != "Di ruolo":
             continue
         try:
-            ore_settimanali = persona.get("Ore settimanali")
-            if ore_settimanali is None:
-                ore_settimanali = 38
-            ore_settimanali = float(ore_settimanali)
-            contratto_annuo_minuti = int(round(float(ore_settimanali) * 52 * 60))
+            contratto_annuo_minuti = int(
+                round(float(persona.get("Ore settimanali", 38) or 38) * 52 * 60)
+            )
         except (TypeError, ValueError):
             return [], [f"Ore settimanali non valide per {nome}."]
-        if contratto_annuo_minuti < 0:
-            return [], [f"Ore settimanali non valide per {nome}."]
-        try:
-            durata_turno_diurno = durata_turno_minuti(regole, "Mattina")
-        except (KeyError, StopIteration, TypeError, ValueError):
-            return [], ["Non riesco a calcolare la durata del turno diurno."]
-        obiettivo_mensile = round(ore_settimanali * len(giorni) / 7 * 60)
-        tolleranza_mensile = 2 * durata_turno_diurno
         obiettivo_progressivo = round(
             contratto_annuo_minuti * giorno_progressivo / giorni_anno
         )
@@ -628,14 +507,6 @@ def genera_calendario(
             for giorno in giorni
             for turno in turni
             if (nome, giorno, turno) in assegnazioni
-        )
-        model.Add(
-            ore_assegnate + int(crediti_mese.get(nome, 0))
-            >= max(0, obiettivo_mensile - tolleranza_mensile)
-        )
-        model.Add(
-            ore_assegnate + int(crediti_mese.get(nome, 0))
-            <= obiettivo_mensile + tolleranza_mensile
         )
         differenza = model.NewIntVar(-1_000_000, 1_000_000, f"saldo_{len(termini_saldo_ore)}")
         scarto = model.NewIntVar(0, 1_000_000, f"scarto_saldo_{len(termini_saldo_ore)}")
@@ -649,29 +520,17 @@ def genera_calendario(
         model.AddAbsEquality(scarto, differenza)
         termini_saldo_ore.append(scarto)
 
-    if (
-        termini_obiettivo
-        or termini_saldo_ore
-        or termini_copertura_mattina
-        or termini_copertura_pomeriggio
-    ):
+    if termini_obiettivo or termini_saldo_ore or termini_copertura_pomeriggio:
         peso_equita = 1
-        peso_saldo_ore = massimo_scarto_equita + 1
-        massimo_scarto_saldo = 1_000_000 * len(termini_saldo_ore)
-        peso_copertura = massimo_scarto_saldo * peso_saldo_ore + massimo_scarto_equita + 1
-        massimo_copertura_pomeriggio = sum(
-            richieste[(giorno, "Pomeriggio")] for giorno in giorni
-        )
-        peso_copertura_mattina = (
-            massimo_copertura_pomeriggio * peso_copertura
-            + massimo_scarto_saldo * peso_saldo_ore
+        peso_copertura = massimo_scarto_equita + 1
+        peso_saldo_ore = (
+            massimo_scarto_copertura * peso_copertura
             + massimo_scarto_equita
             + 1
         )
         model.Minimize(
-            sum(termini_copertura_mattina) * peso_copertura_mattina
+            sum(termini_saldo_ore) * peso_saldo_ore
             + sum(termini_copertura_pomeriggio) * peso_copertura
-            + sum(termini_saldo_ore) * peso_saldo_ore
             + sum(termini_obiettivo) * peso_equita
         )
 
@@ -696,25 +555,6 @@ def genera_calendario(
                 )
     if errori:
         return [], errori
-
-    for calendario_escluso in calendari_esclusi or []:
-        turni_esclusi = {
-            (str(riga["Nome"]).strip(), _data(riga["Data"]), riga["Turno"])
-            for riga in calendario_escluso
-        }
-        selezionati = [
-            variabile
-            for chiave, variabile in assegnazioni.items()
-            if chiave in turni_esclusi
-        ]
-        non_selezionati = [
-            variabile
-            for chiave, variabile in assegnazioni.items()
-            if chiave not in turni_esclusi
-        ]
-        model.Add(
-            sum(selezionati) - sum(non_selezionati) <= len(selezionati) - 1
-        )
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 30
@@ -742,33 +582,3 @@ def genera_calendario(
             )
     risultato.sort(key=lambda riga: (riga["Data"], turni.index(riga["Turno"]), riga["Nome"]))
     return risultato, []
-
-
-def genera_calendari_alternativi(
-    personale: list[dict],
-    regole: dict,
-    anno: int,
-    mese: int,
-    pianificazione: dict,
-    storico_minuti: dict[str, int] | None = None,
-    assegnazioni_precedenti: list[dict] | None = None,
-) -> tuple[list[list[dict]], list[str]]:
-    """Genera fino a tre calendari validi e distinti per lo stesso mese."""
-    alternative = []
-    for _ in range(3):
-        calendario, errori = genera_calendario(
-            personale,
-            regole,
-            anno,
-            mese,
-            pianificazione,
-            storico_minuti=storico_minuti,
-            assegnazioni_precedenti=assegnazioni_precedenti,
-            calendari_esclusi=alternative,
-        )
-        if errori:
-            if alternative and errori[0].startswith("Non esiste un calendario"):
-                break
-            return [], errori
-        alternative.append(calendario)
-    return alternative, []

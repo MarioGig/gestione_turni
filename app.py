@@ -52,6 +52,7 @@ REGOLE_DEFAULT = {
         {"Turno": "Pomeriggio", "Feriale": 2, "Festivo": 1},
         {"Turno": "Notte", "Feriale": 1, "Festivo": 1},
     ],
+    "pomeriggio_feriale_minimo": 1,
     "riposo_minimo_ore": 11,
 }
 
@@ -154,7 +155,7 @@ def tabella_quote(nomi: list[str], salvate: list[dict]) -> pd.DataFrame:
     precedenti = {riga["Nome"]: riga for riga in salvate}
     righe = []
     for nome in nomi:
-        riga: dict[str, object] = {colonna: None for colonna in COLONNE_QUOTE}
+        riga = {colonna: None for colonna in COLONNE_QUOTE}
         riga.update(precedenti.get(nome, {}))
         riga["Nome"] = nome
         righe.append(riga)
@@ -234,7 +235,7 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
     anno = int(colonna_anno.number_input("Anno", min_value=2024, max_value=2100, value=anno_pred, step=1, key="anno_sel"))
 
     chiave = f"{anno}-{mese:02d}"
-    salvato: dict = dati["mesi"].get(chiave, {})
+    salvato = dati["mesi"].get(chiave, {})
     approvazione = salvato.get("approvazione")
     validato = bool(approvazione)
     primo_giorno = date(anno, mese, 1)
@@ -247,10 +248,7 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
         "Per ogni tipo di turno indica il minimo e il massimo che la persona può fare in questo mese. "
         "Minimo vuoto significa 0; massimo vuoto significa nessun limite. "
         "Le quote si applicano a tutto il personale, compreso chi è disponibile solo nei festivi. "
-        "Per il personale di ruolo, il monte ore è vincolato a 38 (o alle ore settimanali "
-        "impostate) per ogni settimana o frazione del mese, con uno scostamento massimo "
-        "di due turni diurni. Dopo ogni notte è previsto lo smonto; non sono pianificati "
-        "più di sei giorni lavorati in sette giorni."
+        "Per aggiungere o togliere persone usa la scheda Personale."
     )
     quote_mod = st.data_editor(
         tabella_quote(nomi, salvato.get("quote", [])),
@@ -333,7 +331,7 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
     extra = {}
     for riga in extra_mod.dropna(subset=["Data"]).itertuples():
         descrizione = str(riga.Descrizione) if pd.notna(riga.Descrizione) else "Festività locale"
-        extra[pd.Timestamp(str(riga.Data)).date()] = descrizione
+        extra[pd.Timestamp(riga.Data).date()] = descrizione
 
     st.markdown(f"**Giorni festivi di {MESI[mese - 1]} {anno}**")
     st.caption("Conta come festiva anche la notte che precede un giorno festivo (per esempio il sabato notte).")
@@ -387,7 +385,7 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
         for riga in predeterminati.itertuples():
             if categorie.get(str(riga.Nome).strip()) != "Solo festivi":
                 continue
-            data_turno = pd.Timestamp(str(riga.Data)).date()
+            data_turno = pd.Timestamp(riga.Data).date()
             festivo = is_festivo(data_turno, extra)
             if riga.Turno == "Notte":
                 festivo = festivo or is_festivo(data_turno + timedelta(days=1), extra)
@@ -423,30 +421,15 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
                 "predeterminati": righe_da_tabella(predeterminati, colonne_data=["Data"]),
                 "festivi_extra": righe_da_tabella(extra_valide, colonne_data=["Data"]),
             }
-            pianificazione_precedente = dati["mesi"].get(chiave, {})
-            sezioni_pianificazione = (
-                "quote", "assenze", "predeterminati", "festivi_extra"
-            )
-            if all(
-                pianificazione_precedente.get(sezione, []) == pianificazione[sezione]
-                for sezione in sezioni_pianificazione
-            ) and pianificazione_precedente.get("calendario"):
-                pianificazione["calendario"] = pianificazione_precedente["calendario"]
             dati["mesi"][chiave] = pianificazione
             salvato = pianificazione
             salva_dati(scelta, dati)
 
             if genera_mese:
                 storico = storico_minuti_approvati(dati, anno, mese)
-                mese_precedente = primo_giorno - timedelta(days=1)
-                chiave_precedente = f"{mese_precedente.year}-{mese_precedente.month:02d}"
-                assegnazioni_precedenti = dati["mesi"].get(
-                    chiave_precedente, {}
-                ).get("calendario", [])
                 assegnazioni, errori_calendario = genera_calendario(
                     dati["personale"], dati["regole"], anno, mese, pianificazione,
                     storico_minuti=storico,
-                    assegnazioni_precedenti=assegnazioni_precedenti,
                 )
                 if errori_calendario:
                     for errore in errori_calendario:
@@ -691,8 +674,7 @@ with tab_regole:
     st.markdown("**Persone richieste per turno**")
     st.caption(
         "Per i festivi vale anche la notte che precede un giorno festivo o una "
-        "domenica (per esempio il sabato notte). Se il personale non basta, "
-        "la copertura del pomeriggio è ridotta prima di quella degli altri turni."
+        "domenica (per esempio il sabato notte)."
     )
     copertura_mod = st.data_editor(
         pd.DataFrame(regole["copertura"]),
@@ -707,6 +689,19 @@ with tab_regole:
                 "Giorni festivi", min_value=0, max_value=50, step=1, format="%d"
             ),
         },
+    )
+
+    pomeriggio_feriale_minimo = st.number_input(
+        "Minimo persone al pomeriggio nei giorni feriali",
+        min_value=0,
+        max_value=50,
+        value=int(regole.get("pomeriggio_feriale_minimo", 1)),
+        step=1,
+        help=(
+            "La copertura Feriale del pomeriggio è il massimo desiderato. "
+            "Il generatore può scendere fino a questo minimo per riequilibrare le ore."
+        ),
+        key=f"pomeriggio_minimo_{scelta}_{versione_r}",
     )
 
     riposo = st.number_input(
@@ -732,8 +727,23 @@ with tab_regole:
                 copertura[colonna] = (
                     pd.to_numeric(copertura[colonna], errors="coerce").fillna(0).astype(int)
                 )
+            copertura_pomeriggio_feriale = next(
+                (
+                    int(riga["Feriale"])
+                    for riga in copertura.to_dict(orient="records")
+                    if riga.get("Turno") == "Pomeriggio"
+                ),
+                0,
+            )
+            if pomeriggio_feriale_minimo > copertura_pomeriggio_feriale:
+                st.error(
+                    "Il minimo di persone al pomeriggio feriale non può superare "
+                    "la copertura feriale del pomeriggio."
+                )
+                st.stop()
             regole["turni"] = json.loads(turni_mod.to_json(orient="records"))
             regole["copertura"] = json.loads(copertura.to_json(orient="records"))
+            regole["pomeriggio_feriale_minimo"] = int(pomeriggio_feriale_minimo)
             regole["riposo_minimo_ore"] = int(riposo)
             invalida_calendari(dati)
             salva_dati(scelta, dati)
