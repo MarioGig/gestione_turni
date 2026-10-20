@@ -271,7 +271,8 @@ def _genera(
       di oltre N turni (scostamento_max_turni, di partenza 2).
     Regole preferenziali, in ordine di importanza:
     - se il personale non basta si riduce per primo il pomeriggio, solo se serve;
-    - la copertura minima di mattina e notte non si riduce mai;
+    - se non basta, la copertura mattutina feriale può scendere fino a 4;
+    - la copertura minima della notte non si riduce mai;
     - dopo lo smonto si preferisce il pomeriggio;
     - il monte ore mensile viene avvicinato il più possibile (anche verso il basso);
     - equità tra le persone.
@@ -378,6 +379,8 @@ def _genera(
                         "tra zero e la copertura feriale configurata."
                     ]
                 massimo_scarto_copertura += richiesta - minimo
+            elif turno == "Mattina" and fascia == "Feriale":
+                minimo = min(richiesta, 4)
             minimi_richiesti[(giorno, turno)] = minimo
 
     quote = {
@@ -526,6 +529,7 @@ def _genera(
     assegnazioni = {}
     candidati_per_slot = {}
     termini_copertura_pomeriggio = []
+    termini_copertura_mattina = []
     for giorno in giorni:
         for turno in turni:
             slot = (giorno, turno)
@@ -554,11 +558,18 @@ def _genera(
                     model.Add(variabile == 1)
             candidati_per_slot[slot] = candidati
             if len(candidati) < minimi_richiesti[slot]:
-                errori.append(
+                messaggio = (
                     f"Copertura impossibile il {giorno:%d/%m/%Y} ({turno}): "
                     f"servono almeno {minimi_richiesti[slot]} persone, "
                     f"disponibili {len(candidati)}."
                 )
+                if turno == "Mattina" and not _turno_festivo(giorno, turno, extra):
+                    messaggio += (
+                        " La copertura mattutina non può scendere sotto 4. "
+                        "Verifica assenze e richieste, abilita o aggiungi personale "
+                        "qualificato, oppure valuta una diversa articolazione dei turni."
+                    )
+                errori.append(messaggio)
             assegnati = sum(assegnazioni[(nome, giorno, turno)] for nome in candidati)
             model.Add(assegnati >= minimi_richiesti[slot])
             model.Add(assegnati <= richieste[slot])
@@ -566,10 +577,13 @@ def _genera(
                 scopertura = model.NewIntVar(
                     0,
                     richieste[slot] - minimi_richiesti[slot],
-                    f"scopertura_pomeriggio_{len(termini_copertura_pomeriggio)}",
+                    f"scopertura_{turno.lower()}_{len(termini_copertura_pomeriggio) + len(termini_copertura_mattina)}",
                 )
                 model.Add(scopertura == richieste[slot] - assegnati)
-                termini_copertura_pomeriggio.append(scopertura)
+                if turno == "Pomeriggio":
+                    termini_copertura_pomeriggio.append(scopertura)
+                elif turno == "Mattina":
+                    termini_copertura_mattina.append(scopertura)
     if errori:
         return [], errori
 
@@ -789,15 +803,23 @@ def _genera(
                     model.Add(sgradito >= notte_origine + variabile - 1)
                     termini_smonto.append((sgradito, penalita, 1))
 
-    # La riduzione del pomeriggio pesa più di tutto il resto messo insieme:
-    # scatta solo se il personale non basta davvero.
+    # Prima si riduce il pomeriggio, poi la mattina; entrambe le riduzioni
+    # prevalgono sulle preferenze individuali e sul bilanciamento delle ore.
     tutti_i_termini = termini + termini_smonto
     massimo_resto = sum(peso * massimo for _, peso, massimo in tutti_i_termini)
-    peso_copertura = massimo_resto + 1
-    if tutti_i_termini or termini_copertura_pomeriggio:
+    peso_copertura_mattina = massimo_resto + 1
+    massimo_riduzione_mattina = sum(
+        richieste[(giorno, "Mattina")] - minimi_richiesti[(giorno, "Mattina")]
+        for giorno in giorni
+    )
+    peso_copertura_pomeriggio = (
+        massimo_resto + massimo_riduzione_mattina * peso_copertura_mattina + 1
+    )
+    if tutti_i_termini or termini_copertura_pomeriggio or termini_copertura_mattina:
         model.Minimize(
             sum(espressione * peso for espressione, peso, _ in tutti_i_termini)
-            + sum(termini_copertura_pomeriggio) * peso_copertura
+            + sum(termini_copertura_mattina) * peso_copertura_mattina
+            + sum(termini_copertura_pomeriggio) * peso_copertura_pomeriggio
         )
 
     def risolvi(seme: int):
@@ -831,7 +853,10 @@ def _genera(
                 "quote mensili, assenze, turni predeterminati, riposo minimo, smonto dopo la "
                 f"notte, un giorno di riposo ogni {max_consecutivi} turni e il tetto del monte "
                 "ore mensile. Controlla i vincoli del mese: per esempio quote massime troppo "
-                "basse, troppe assenze o turni predeterminati ravvicinati."
+                "basse, troppe assenze o turni predeterminati ravvicinati. Se non è sufficiente, "
+                "verifica la disponibilità e l'abilitazione del personale, ridistribuisci le "
+                "richieste o valuta una diversa articolazione dei turni mantenendo almeno 4 "
+                "unità al mattino."
             ]
         return [], ["Il calcolo del calendario non è riuscito entro il tempo disponibile."]
 
@@ -951,6 +976,7 @@ def riepilogo_calendario(
         (r for r in regole.get("copertura", []) if r.get("Turno") == "Pomeriggio"), {}
     )
     pomeriggi_ridotti = 0
+    mattine_ridotte = 0
     for giorno in giorni:
         fascia = "Festivo" if _turno_festivo(giorno, "Pomeriggio", extra) else "Feriale"
         try:
@@ -959,6 +985,19 @@ def riepilogo_calendario(
             richiesta = 0
         if pomeriggi_per_giorno.get(giorno, 0) < richiesta:
             pomeriggi_ridotti += 1
+        if not _turno_festivo(giorno, "Mattina", extra):
+            richiesta_mattina = next(
+                (r for r in regole.get("copertura", []) if r.get("Turno") == "Mattina"), {}
+            )
+            assegnati_mattina = sum(
+                1 for (nome, data), turno in lavoro.items()
+                if data == giorno and turno == "Mattina"
+            )
+            try:
+                if assegnati_mattina < int(richiesta_mattina.get("Feriale", 0) or 0):
+                    mattine_ridotte += 1
+            except (TypeError, ValueError):
+                pass
 
     notte_smonto_notte = sum(
         1
@@ -997,6 +1036,7 @@ def riepilogo_calendario(
         righe.append(riga)
     indicatori = {
         "pomeriggi_ridotti": pomeriggi_ridotti,
+        "mattine_ridotte": mattine_ridotte,
         "notte_smonto_notte": notte_smonto_notte,
         "persone_fuori_limite": fuori_limite,
         "scostamento_massimo_turni": round(scostamento_massimo, 1),
@@ -1103,6 +1143,7 @@ def controlla_calendario(
 
     # Coperture
     pomeriggi_ridotti = []
+    mattine_ridotte = []
     for giorno in giorni:
         for turno in TURNI:
             fascia = "Festivo" if _turno_festivo(giorno, turno, extra) else "Feriale"
@@ -1119,15 +1160,30 @@ def controlla_calendario(
             if assegnati < richiesta:
                 if turno == "Pomeriggio":
                     pomeriggi_ridotti.append(f"{giorno:%d/%m} ({assegnati} su {richiesta})")
+                elif turno == "Mattina" and fascia == "Feriale" and assegnati >= min(richiesta, 4):
+                    mattine_ridotte.append(f"{giorno:%d/%m} ({assegnati} su {richiesta})")
                 else:
                     violazioni.append(
                         f"Copertura incompleta il {giorno:%d/%m/%Y} ({turno}): "
                         f"{assegnati} persone su {richiesta}."
+                        + (
+                            " La copertura mattutina feriale non può scendere sotto 4; "
+                            "verifica assenze e richieste, abilita o aggiungi personale "
+                            "qualificato, oppure valuta una diversa articolazione dei turni."
+                            if turno == "Mattina" and fascia == "Feriale"
+                            else ""
+                        )
                     )
     if pomeriggi_ridotti:
         avvisi.append(
             "Personale insufficiente: pomeriggio ridotto nei giorni "
             + ", ".join(pomeriggi_ridotti)
+            + "."
+        )
+    if mattine_ridotte:
+        avvisi.append(
+            "Personale insufficiente: mattina ridotta, mantenendo almeno 4 unità, nei giorni "
+            + ", ".join(mattine_ridotte)
             + "."
         )
 

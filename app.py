@@ -355,6 +355,7 @@ def mostra_alternative(
             {
                 "Proposta": indice,
                 "Pomeriggi ridotti (giorni)": indicatori.get("pomeriggi_ridotti"),
+                "Mattine ridotte (giorni)": indicatori.get("mattine_ridotte"),
                 "Notte, smonto, notte": indicatori.get("notte_smonto_notte"),
                 "Persone fuori dal limite ore": indicatori.get("persone_fuori_limite"),
                 "Scostamento massimo (turni)": indicatori.get("scostamento_massimo_turni"),
@@ -554,6 +555,14 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
                 )
 
         predeterminati = predeterminati_mod.dropna(subset=COLONNE_PREDETERMINATI)
+        predeterminati_incompleti = predeterminati_mod[
+            predeterminati_mod[COLONNE_PREDETERMINATI].isna().any(axis=1)
+        ]
+        if predeterminati_incompleti.shape[0] and (genera_mese or genera_alt):
+            errori.append(
+                f"Ci sono {len(predeterminati_incompleti)} turni predeterminati incompleti: "
+                "completa Nome, Data e Turno prima di generare il calendario."
+            )
         if predeterminati.duplicated().any():
             errori.append("Ci sono due turni predeterminati identici: elimina i doppioni.")
 
@@ -587,7 +596,6 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
         extra_valide = extra_mod.dropna(subset=["Data"])
         scartate = (
             (len(assenze_mod) - len(assenze))
-            + (len(predeterminati_mod) - len(predeterminati))
             + (len(extra_mod) - len(extra_valide))
         )
 
@@ -598,7 +606,10 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
             pianificazione = {
                 "quote": righe_da_tabella(quote_mod, colonne_intere=COLONNE_QUOTE[1:]),
                 "assenze": assenze_salvate,
-                "predeterminati": righe_da_tabella(predeterminati, colonne_data=["Data"]),
+                "predeterminati": righe_da_tabella(
+                    predeterminati_mod if salva_mese else predeterminati,
+                    colonne_data=["Data"],
+                ),
                 "festivi_extra": righe_da_tabella(extra_valide, colonne_data=["Data"]),
             }
             dati["mesi"][chiave] = pianificazione
@@ -678,6 +689,11 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
                 st.session_state.pop("alternative", None)
                 st.session_state["versione_mese"] = versione + 1
                 messaggio = f"Pianificazione di {MESI[mese - 1]} {anno} salvata."
+                if len(predeterminati_incompleti):
+                    messaggio += (
+                        f" {len(predeterminati_incompleti)} turni predeterminati incompleti "
+                        "sono stati conservati; completa Nome, Data e Turno prima di generare."
+                    )
                 if scartate:
                     messaggio += f" {scartate} righe incomplete sono state scartate."
                 st.session_state["messaggio"] = messaggio
@@ -1026,4 +1042,4 @@ with tab_mese:
         for riga in dati["personale"]
         if str(riga.get("Nome", "")).strip()
     ]
-    mostra_pianificazione(scelta, dati, nomi)
+    mostra_pianificazione(scelta, dati, nomi)
