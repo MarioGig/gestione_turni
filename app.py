@@ -9,11 +9,14 @@ import pandas as pd
 import streamlit as st
 from calendario import (
     CODICI_ASSENZA,
+    controlla_calendario,
     crediti_assenza_minuti,
     festivita_nazionali,
+    genera_alternative,
     genera_calendario,
     is_festivo,
     ore_calendario_per_persona,
+    riepilogo_calendario,
 )
 from excel_report import crea_report_excel
 
@@ -54,6 +57,8 @@ REGOLE_DEFAULT = {
     ],
     "pomeriggio_feriale_minimo": 1,
     "riposo_minimo_ore": 11,
+    "scostamento_max_turni": 2,   # al massimo +2 turni rispetto al monte ore mensile
+    "max_turni_consecutivi": 6,   # ogni 6 turni di lavoro serve 1 giorno di riposo
 }
 
 
@@ -121,6 +126,25 @@ def storico_mesi_approvati(dati: dict, anno: int, mese: int) -> dict[int, dict[s
                 for nome, minuti in approvazione.get("minuti_credito", {}).items()
             }
     return storico
+
+
+def giorni_storico_approvati(dati: dict, anno: int, mese: int) -> int:
+    """Giorni dei mesi già validati nell'anno: servono per l'obiettivo ore progressivo."""
+    return sum(
+        calendar.monthrange(anno, numero)[1]
+        for numero in storico_mesi_approvati(dati, anno, mese)
+    )
+
+
+def calendario_mese_precedente(dati: dict, anno: int, mese: int) -> list[dict]:
+    """Turni del mese precedente (validati, se ci sono): garantiscono la continuità
+    di smonto, riposo e giorni consecutivi a cavallo tra due mesi."""
+    anno_prec, mese_prec = (anno - 1, 12) if mese == 1 else (anno, mese - 1)
+    pianificazione = dati["mesi"].get(f"{anno_prec}-{mese_prec:02d}", {})
+    approvazione = pianificazione.get("approvazione")
+    if approvazione:
+        return approvazione.get("calendario", [])
+    return pianificazione.get("calendario", [])
 
 
 # ---------- Funzioni di supporto ----------
@@ -216,6 +240,157 @@ def festivi_del_mese(anno: int, mese: int, extra: dict[date, str]) -> pd.DataFra
                 {"Data": data.strftime("%d/%m/%Y"), "Giorno": GIORNI[data.weekday()], "Motivo": motivo}
             )
     return pd.DataFrame(righe, columns=["Data", "Giorno", "Motivo"])
+
+COLORI_CODICI = {
+    "M": "#D9EAF7", "P": "#E2F0D9", "N": "#B4C6E7", "S": "#FFF2CC", "R": "#F2F2F2",
+    "F": "#FCE4D6", "Mal": "#F4CCCC", "CS": "#D9D2E9",
+}
+
+
+def griglia_calendario(
+    nomi: list[str],
+    anno: int,
+    mese: int,
+    pianificazione: dict,
+    assegnazioni: list[dict],
+    precedente: list[dict],
+) -> pd.DataFrame:
+    """Tabella persone x giorni con i codici M, P, N, S (smonto), R, F, Mal, CS."""
+    giorni = [date(anno, mese, n) for n in range(1, calendar.monthrange(anno, mese)[1] + 1)]
+    codici_turno = {"Mattina": "M", "Pomeriggio": "P", "Notte": "N"}
+    lavoro = {}
+    for riga in assegnazioni:
+        giorno = date.fromisoformat(str(riga["Data"])[:10])
+        lavoro[(str(riga["Nome"]).strip(), giorno)] = codici_turno.get(riga["Turno"], "")
+    giorno_prima = (giorni[0] - timedelta(days=1)).isoformat()
+    notti_prima = {
+        str(riga.get("Nome", "")).strip()
+        for riga in precedente
+        if riga.get("Turno") == "Notte" and str(riga.get("Data"))[:10] == giorno_prima
+    }
+    assenze = {}
+    for assenza in pianificazione.get("assenze", []):
+        if not assenza.get("Dal") or not assenza.get("Al"):
+            continue
+        codice = CODICI_ASSENZA.get(str(assenza.get("Tipo") or ""), "CS")
+        codice = "Mal" if codice == "M" else codice
+        dal = date.fromisoformat(str(assenza["Dal"])[:10])
+        al = date.fromisoformat(str(assenza["Al"])[:10])
+        for giorno in giorni:
+            if dal <= giorno <= al:
+                assenze[(str(assenza.get("Nome", "")).strip(), giorno)] = codice
+    righe = []
+    for nome in nomi:
+        riga = {"Nome": nome}
+        for giorno in giorni:
+            if (nome, giorno) in assenze:
+                codice = assenze[(nome, giorno)]
+            elif (nome, giorno) in lavoro:
+                codice = lavoro[(nome, giorno)]
+            else:
+                dopo_notte = (
+                    lavoro.get((nome, giorno - timedelta(days=1))) == "N"
+                    or (giorno == giorni[0] and nome in notti_prima)
+                )
+                codice = "S" if dopo_notte else "R"
+            riga[f"{giorno.day:02d}{'LMMGVSD'[giorno.weekday()]}"] = codice
+        righe.append(riga)
+    return pd.DataFrame(righe).set_index("Nome")
+
+
+def colora_codice(valore: str) -> str:
+    colore = COLORI_CODICI.get(valore)
+    return f"background-color: {colore}; color: #000000;" if colore else ""
+
+
+def mostra_alternative(
+    scelta: str,
+    dati: dict,
+    nomi: list[str],
+    anno: int,
+    mese: int,
+    chiave: str,
+    suffisso: str,
+    versione: int,
+    validato: bool,
+) -> None:
+    """Confronto delle proposte generate e scelta di quella preferita."""
+    contenitore = st.session_state.get("alternative")
+    if (
+        validato
+        or chiave not in dati["mesi"]
+        or not contenitore
+        or contenitore.get("struttura") != scelta
+        or contenitore.get("mese") != chiave
+    ):
+        return
+    proposte = contenitore["proposte"]
+    st.markdown("**Proposte di calendario**")
+    if not proposte:
+        st.info("Non ho trovato proposte valide: controlla i vincoli del mese.")
+        return
+    if len(proposte) == 1:
+        st.info(
+            "Ho trovato una sola proposta: con i vincoli di questo mese non esistono "
+            "altri calendari abbastanza diversi."
+        )
+    st.caption(
+        "Tutte le proposte rispettano le regole obbligatorie. Confronta gli indicatori, "
+        "guarda le griglie e premi Scegli sulla proposta preferita: diventerà il calendario "
+        "del mese."
+    )
+    pianificazione = dati["mesi"][chiave]
+    precedente = calendario_mese_precedente(dati, anno, mese)
+    riepiloghi = [
+        riepilogo_calendario(
+            dati["personale"], dati["regole"], anno, mese, pianificazione, proposta, precedente
+        )
+        for proposta in proposte
+    ]
+    prima = {(r["Data"], r["Turno"], r["Nome"]) for r in proposte[0]}
+    confronto = []
+    for indice, (proposta, (indicatori, _)) in enumerate(zip(proposte, riepiloghi), start=1):
+        attuale = {(r["Data"], r["Turno"], r["Nome"]) for r in proposta}
+        confronto.append(
+            {
+                "Proposta": indice,
+                "Pomeriggi ridotti (giorni)": indicatori.get("pomeriggi_ridotti"),
+                "Notte, smonto, notte": indicatori.get("notte_smonto_notte"),
+                "Persone fuori dal limite ore": indicatori.get("persone_fuori_limite"),
+                "Scostamento massimo (turni)": indicatori.get("scostamento_massimo_turni"),
+                "Turni diversi dalla proposta 1": len(attuale - prima),
+            }
+        )
+    st.dataframe(pd.DataFrame(confronto), hide_index=True)
+
+    schede = st.tabs([f"Proposta {indice}" for indice in range(1, len(proposte) + 1)])
+    for indice, (scheda, proposta, (_, righe)) in enumerate(
+        zip(schede, proposte, riepiloghi), start=1
+    ):
+        with scheda:
+            griglia = griglia_calendario(nomi, anno, mese, pianificazione, proposta, precedente)
+            st.dataframe(griglia.style.map(colora_codice))
+            st.caption("M mattina · P pomeriggio · N notte · S smonto · R riposo · F ferie · Mal malattia · CS congedo")
+            st.dataframe(pd.DataFrame(righe), hide_index=True)
+            if st.button(f"Scegli la proposta {indice}", type="primary", key=f"scegli_{suffisso}_{indice}"):
+                violazioni, avvisi = controlla_calendario(
+                    dati["personale"], dati["regole"], anno, mese, pianificazione, proposta, precedente
+                )
+                if violazioni:
+                    for violazione in violazioni:
+                        st.error(violazione)
+                else:
+                    pianificazione["calendario"] = proposta
+                    salva_dati(scelta, dati)
+                    st.session_state.pop("alternative", None)
+                    st.session_state["avvisi"] = avvisi
+                    st.session_state["versione_mese"] = versione + 1
+                    st.session_state["messaggio"] = (
+                        f"Proposta {indice} scelta come calendario di {MESI[mese - 1]} {anno}. "
+                        "Controllalo e imposta Validato su Sì per archiviarlo."
+                    )
+                    st.rerun()
+
 
 def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
     """Scheda con quote mensili, assenze, turni predeterminati e festività."""
@@ -337,13 +512,18 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
     st.caption("Conta come festiva anche la notte che precede un giorno festivo (per esempio il sabato notte).")
     st.dataframe(festivi_del_mese(anno, mese, extra), hide_index=True)
 
-    colonna_salva, colonna_genera = st.columns(2)
+    colonna_salva, colonna_genera, colonna_alternative = st.columns(3)
     salva_mese = colonna_salva.button("Salva pianificazione del mese", disabled=validato)
     genera_mese = colonna_genera.button(
         "Genera calendario Excel", type="primary", disabled=validato
     )
+    genera_alt = colonna_alternative.button(
+        "Genera 3 proposte da confrontare",
+        disabled=validato,
+        help="Calcola fino a 3 calendari validi e diversi tra loro (circa 1-2 minuti).",
+    )
 
-    if salva_mese or genera_mese:
+    if salva_mese or genera_mese or genera_alt:
         errori = []
 
         for lettera, nome_turno in (("M", "mattine"), ("P", "pomeriggi"), ("N", "notti")):
@@ -425,19 +605,69 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
             salvato = pianificazione
             salva_dati(scelta, dati)
 
-            if genera_mese:
+            if genera_alt:
                 storico = storico_minuti_approvati(dati, anno, mese)
-                assegnazioni, errori_calendario = genera_calendario(
-                    dati["personale"], dati["regole"], anno, mese, pianificazione,
-                    storico_minuti=storico,
-                )
+                precedente = calendario_mese_precedente(dati, anno, mese)
+                with st.spinner("Calcolo delle proposte in corso: può richiedere un paio di minuti..."):
+                    proposte, errori_calendario = genera_alternative(
+                        dati["personale"], dati["regole"], anno, mese, pianificazione,
+                        storico_minuti=storico,
+                        giorni_storico=giorni_storico_approvati(dati, anno, mese),
+                        calendario_precedente=precedente,
+                        numero=3,
+                        secondi_per_alternativa=30,
+                    )
                 if errori_calendario:
                     for errore in errori_calendario:
                         st.error(errore)
                     st.info("La pianificazione è stata salvata; correggi i vincoli e genera di nuovo.")
                 else:
+                    valide = [
+                        proposta
+                        for proposta in proposte
+                        if not controlla_calendario(
+                            dati["personale"], dati["regole"], anno, mese, pianificazione,
+                            proposta, precedente,
+                        )[0]
+                    ]
+                    st.session_state["alternative"] = {
+                        "struttura": scelta, "mese": chiave, "proposte": valide,
+                    }
+                    st.session_state["versione_mese"] = versione + 1
+                    st.session_state["messaggio"] = (
+                        f"Generate {len(valide)} proposte per {MESI[mese - 1]} {anno}: "
+                        "confrontale qui sotto e scegli quella preferita."
+                    )
+                    st.rerun()
+            elif genera_mese:
+                storico = storico_minuti_approvati(dati, anno, mese)
+                precedente = calendario_mese_precedente(dati, anno, mese)
+                assegnazioni, errori_calendario = genera_calendario(
+                    dati["personale"], dati["regole"], anno, mese, pianificazione,
+                    storico_minuti=storico,
+                    giorni_storico=giorni_storico_approvati(dati, anno, mese),
+                    calendario_precedente=precedente,
+                )
+                violazioni, avvisi = ([], [])
+                if not errori_calendario:
+                    violazioni, avvisi = controlla_calendario(
+                        dati["personale"], dati["regole"], anno, mese, pianificazione,
+                        assegnazioni, precedente,
+                    )
+                if errori_calendario:
+                    for errore in errori_calendario:
+                        st.error(errore)
+                    st.info("La pianificazione è stata salvata; correggi i vincoli e genera di nuovo.")
+                elif violazioni:
+                    # Non dovrebbe accadere: il calendario non viene salvato
+                    for violazione in violazioni:
+                        st.error(violazione)
+                    st.info("Il calendario generato non rispetta le regole e non è stato salvato.")
+                else:
                     pianificazione["calendario"] = assegnazioni
                     salva_dati(scelta, dati)
+                    st.session_state.pop("alternative", None)
+                    st.session_state["avvisi"] = avvisi
                     st.session_state["versione_mese"] = versione + 1
                     st.session_state["messaggio"] = (
                         f"Calendario di {MESI[mese - 1]} {anno} generato. "
@@ -445,12 +675,15 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
                     )
                     st.rerun()
             else:
+                st.session_state.pop("alternative", None)
                 st.session_state["versione_mese"] = versione + 1
                 messaggio = f"Pianificazione di {MESI[mese - 1]} {anno} salvata."
                 if scartate:
                     messaggio += f" {scartate} righe incomplete sono state scartate."
                 st.session_state["messaggio"] = messaggio
                 st.rerun()
+
+    mostra_alternative(scelta, dati, nomi, anno, mese, chiave, suffisso, versione, validato)
 
     st.markdown("**Approvazione e archivio**")
     validato_selezionato = st.checkbox(
@@ -537,6 +770,7 @@ def mostra_pianificazione(scelta: str, dati: dict, nomi: list[str]) -> None:
                 sorgente.get("calendario", salvato["calendario"]),
                 storico_minuti=storico_minuti_approvati(dati, anno, mese),
                 storico_mesi=storico_mesi_approvati(dati, anno, mese),
+                assegnazioni_precedenti=calendario_mese_precedente(dati, anno, mese),
             )
         except ValueError as errore:
             st.warning(f"{errore} Premi “Genera calendario Excel” per aggiornarlo.")
@@ -557,6 +791,8 @@ st.title("Gestione turni sanitari")
 
 if "messaggio" in st.session_state:
     st.success(st.session_state.pop("messaggio"))
+for avviso in st.session_state.pop("avvisi", []):
+    st.warning(avviso)
 
 # Barra laterale: scelta e creazione della struttura
 with st.sidebar:
@@ -633,6 +869,7 @@ with tab_personale:
             st.error("Ci sono nomi duplicati: correggili prima di salvare.")
         else:
             dati["personale"] = json.loads(da_salvare.to_json(orient="records"))
+            st.session_state.pop("alternative", None)
             invalida_calendari(dati)
             salva_dati(scelta, dati)
             st.session_state["versione_personale"] = versione_p + 1
@@ -698,8 +935,9 @@ with tab_regole:
         value=int(regole.get("pomeriggio_feriale_minimo", 1)),
         step=1,
         help=(
-            "La copertura Feriale del pomeriggio è il massimo desiderato. "
-            "Il generatore può scendere fino a questo minimo per riequilibrare le ore."
+            "La copertura Feriale del pomeriggio è quella desiderata. "
+            "Il generatore scende fino a questo minimo solo se il personale non basta "
+            "a coprire tutti i turni: il pomeriggio è il primo turno a essere ridotto."
         ),
         key=f"pomeriggio_minimo_{scelta}_{versione_r}",
     )
@@ -711,6 +949,32 @@ with tab_regole:
         step=1,
         value=int(regole["riposo_minimo_ore"]),
         key=f"riposo_{scelta}_{versione_r}",
+    )
+
+    scostamento_max_turni = st.number_input(
+        "Scostamento massimo dal monte ore mensile (in turni)",
+        min_value=0,
+        max_value=10,
+        step=1,
+        value=int(regole.get("scostamento_max_turni", 2)),
+        help=(
+            "Il monte ore del mese è Ore settimanali × (giorni del mese ÷ 7). "
+            "Nessuno può superarlo di più di questo numero di turni."
+        ),
+        key=f"scostamento_{scelta}_{versione_r}",
+    )
+
+    max_turni_consecutivi = st.number_input(
+        "Turni di lavoro consecutivi prima di un giorno di riposo",
+        min_value=1,
+        max_value=14,
+        step=1,
+        value=int(regole.get("max_turni_consecutivi", 6)),
+        help=(
+            "Dopo la notte c'è lo smonto: il giorno dopo non si lavora, ma lo smonto "
+            "non conta come giorno di riposo."
+        ),
+        key=f"consecutivi_{scelta}_{versione_r}",
     )
 
     if st.button("Salva regole", type="primary"):
@@ -745,6 +1009,9 @@ with tab_regole:
             regole["copertura"] = json.loads(copertura.to_json(orient="records"))
             regole["pomeriggio_feriale_minimo"] = int(pomeriggio_feriale_minimo)
             regole["riposo_minimo_ore"] = int(riposo)
+            regole["scostamento_max_turni"] = int(scostamento_max_turni)
+            regole["max_turni_consecutivi"] = int(max_turni_consecutivi)
+            st.session_state.pop("alternative", None)
             invalida_calendari(dati)
             salva_dati(scelta, dati)
             st.session_state["versione_regole"] = versione_r + 1
@@ -759,4 +1026,4 @@ with tab_mese:
         for riga in dati["personale"]
         if str(riga.get("Nome", "")).strip()
     ]
-    mostra_pianificazione(scelta, dati, nomi)
+    mostra_pianificazione(scelta, dati, nomi)
